@@ -15,8 +15,7 @@
       overflow: hidden;
     }
     .topbar {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
     }
     .status { font-size: 14px; color: #94a3b8; }
     .status.connected { color: #4ade80; }
@@ -27,8 +26,7 @@
     .btn-connect { background: #3b82f6; color: #fff; }
 
     .controls {
-      flex: 1; display: flex; align-items: center; justify-content: space-around;
-      gap: 20px;
+      flex: 1; display: flex; align-items: center; justify-content: space-around; gap: 20px;
     }
     .right-group {
       display: flex; flex-direction: column; align-items: center; gap: 18px;
@@ -95,12 +93,15 @@
   <script>
     const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
     const CHAR_RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-    const AUTH_TOKEN   = 'ME301A'; // 必須與 Arduino 的 AUTH_TOKEN 一致
+
+    // 二進位驗證封包：[0xAA, 0x88, 0x42]
+    const AUTH_PACKET = new Uint8Array([0xAA, 0x88, 0x42]);
 
     let bleDevice = null;
     let rxChar = null;
     let isWriting = false;
-    let pendingPayload = null;
+    let pendingBytes = null;
+    let heartbeatTimer = null;
 
     let currentX = 0;
     let currentY = 0;
@@ -113,42 +114,43 @@
     const valYEl     = document.getElementById('valY');
     const valREl     = document.getElementById('valR');
 
-    async function sendBLE(text, force = false) {
+    async function sendBytes(bytes, force = false) {
       if (!rxChar) return;
       const now = Date.now();
-      if (!force && now - lastSendTime < 50) return;
+      if (!force && now - lastSendTime < 40) return;
       lastSendTime = now;
 
       if (isWriting) {
-        pendingPayload = text;
+        pendingBytes = bytes;
         return;
       }
 
       isWriting = true;
       try {
-        const data = new TextEncoder().encode(text);
         if (rxChar.properties.writeWithoutResponse) {
-          await rxChar.writeValueWithoutResponse(data);
+          await rxChar.writeValueWithoutResponse(bytes);
         } else {
-          await rxChar.writeValue(data);
+          await rxChar.writeValue(bytes);
         }
       } catch (err) {
         console.warn('BLE 傳送失敗:', err);
       } finally {
         isWriting = false;
-        if (pendingPayload !== null) {
-          const next = pendingPayload;
-          pendingPayload = null;
-          sendBLE(next, true);
+        if (pendingBytes !== null) {
+          const next = pendingBytes;
+          pendingBytes = null;
+          sendBytes(next, true);
         }
       }
     }
 
-    function pushState(force = false) {
+    function sendControl(force = false) {
       valXEl.textContent = currentX;
       valYEl.textContent = currentY;
       valREl.textContent = currentR;
-      sendBLE(`${currentX},${currentY},${currentR}`, force);
+      // 4 bytes 二進位控制封包：[0xCC, x, y, r]
+      const pkt = new Uint8Array([0xCC, currentX & 0xFF, currentY & 0xFF, currentR & 0xFF]);
+      sendBytes(pkt, force);
     }
 
     function setupSlider(trackEl, thumbEl, isVertical, onChange) {
@@ -185,16 +187,13 @@
     }
 
     setupSlider(document.getElementById('trackY'), document.getElementById('thumbY'), true, (v, force) => {
-      currentY = v;
-      pushState(force);
+      currentY = v; sendControl(force);
     });
     setupSlider(document.getElementById('trackX'), document.getElementById('thumbX'), false, (v, force) => {
-      currentX = v;
-      pushState(force);
+      currentX = v; sendControl(force);
     });
     setupSlider(document.getElementById('trackR'), document.getElementById('thumbR'), false, (v, force) => {
-      currentR = v;
-      pushState(force);
+      currentR = v; sendControl(force);
     });
 
     connectBtn.addEventListener('click', async () => {
@@ -208,8 +207,11 @@
           filters: [{ name: 'team14' }],
           optionalServices: [SERVICE_UUID]
         });
+
         bleDevice.addEventListener('gattserverdisconnected', () => {
           rxChar = null;
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
           statusText.textContent = '已斷線';
           statusText.classList.remove('connected');
           connectBtn.textContent = '連線 team14';
@@ -220,18 +222,19 @@
         const service = await server.getPrimaryService(SERVICE_UUID);
         rxChar = await service.getCharacteristic(CHAR_RX_UUID);
 
-        // 等待 300ms 讓 iOS BLE 通道就緒，並連送兩次確保送達
         statusText.textContent = '驗證中...';
-        await new Promise(r => setTimeout(r, 300));
-        await sendBLE(`K:${AUTH_TOKEN}`, true);
-        await new Promise(r => setTimeout(r, 200));
-        await sendBLE(`K:${AUTH_TOKEN}`, true);
+        await new Promise(r => setTimeout(r, 250));
+        await sendBytes(AUTH_PACKET, true);
+        await new Promise(r => setTimeout(r, 150));
+        await sendBytes(AUTH_PACKET, true);
+
+        // 啟動 150ms 心跳，配合 ESP32 的 400ms 斷訊煞車保護
+        heartbeatTimer = setInterval(() => sendControl(true), 150);
 
         statusText.textContent = '已連線並驗證';
         statusText.classList.add('connected');
         connectBtn.textContent = '斷線';
       } catch (err) {
-        // 把實際錯誤原因直接顯示在手機畫面上
         statusText.textContent = '失敗: ' + err.message;
         console.error(err);
       }
