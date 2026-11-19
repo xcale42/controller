@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>team14 雙滑桿遙控器</title>
+  <title>team14 全向遙控器</title>
   <style>
     * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
     body {
-      margin: 0; padding: 16px;
+      margin: 0; padding: 14px 18px;
       height: 100dvh; width: 100vw;
       background: #121418; color: #f1f5f9;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -21,52 +21,51 @@
     .status { font-size: 14px; color: #94a3b8; }
     .status.connected { color: #4ade80; }
     .btn {
-      padding: 10px 18px; border: none; border-radius: 10px;
-      font-size: 15px; font-weight: 600; cursor: pointer;
+      padding: 8px 16px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
     }
     .btn-connect { background: #3b82f6; color: #fff; }
     .btn-stop { background: #ef4444; color: #fff; }
 
     .controls {
       flex: 1; display: flex; align-items: center; justify-content: space-around;
-      gap: 24px; padding: 12px 0;
+      gap: 20px;
+    }
+    .right-group {
+      display: flex; flex-direction: column; align-items: center; gap: 18px;
     }
     .panel {
-      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
     }
-    .label { font-size: 14px; color: #cbd5e1; letter-spacing: 0.5px; }
+    .label { font-size: 13px; color: #cbd5e1; }
 
-    /* 垂直滑桿（前後） */
     .track-v {
-      position: relative; width: 76px; height: 240px;
-      background: #1e293b; border-radius: 38px;
-      border: 2px solid #334155;
+      position: relative; width: 72px; height: 210px;
+      background: #1e293b; border-radius: 36px; border: 2px solid #334155;
     }
     .track-v::before {
       content: ""; position: absolute; left: 10px; right: 10px; top: 50%;
       height: 2px; background: #475569; transform: translateY(-50%);
     }
 
-    /* 水平滑桿（左右） */
     .track-h {
-      position: relative; width: 240px; height: 76px;
-      background: #1e293b; border-radius: 38px;
-      border: 2px solid #334155;
+      position: relative; width: 220px; height: 68px;
+      background: #1e293b; border-radius: 34px; border: 2px solid #334155;
     }
     .track-h::before {
       content: ""; position: absolute; top: 10px; bottom: 10px; left: 50%;
       width: 2px; background: #475569; transform: translateX(-50%);
     }
 
-    /* 滑塊 */
     .thumb {
-      position: absolute; width: 64px; height: 64px;
-      border-radius: 50%; background: #38bdf8;
-      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.45);
-      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      position: absolute; width: 58px; height: 58px;
+      border-radius: 50%; left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
       pointer-events: none;
     }
+    #thumbY { background: #38bdf8; box-shadow: 0 4px 14px rgba(56, 189, 248, 0.45); }
     #thumbX { background: #f59e0b; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45); }
+    #thumbR { background: #a855f7; box-shadow: 0 4px 14px rgba(168, 85, 247, 0.45); }
   </style>
 </head>
 <body>
@@ -78,13 +77,20 @@
 
   <div class="controls">
     <div class="panel">
-      <div class="label">前後油門：<span id="valY">0</span></div>
+      <div class="label">前後移動：<span id="valY">0</span></div>
       <div id="trackY" class="track-v"><div id="thumbY" class="thumb"></div></div>
     </div>
 
-    <div class="panel">
-      <div class="label">左右轉向：<span id="valX">0</span></div>
-      <div id="trackX" class="track-h"><div id="thumbX" class="thumb"></div></div>
+    <div class="right-group">
+      <div class="panel">
+        <div class="label">左右平移（配合前後可斜走）：<span id="valX">0</span></div>
+        <div id="trackX" class="track-h"><div id="thumbX" class="thumb"></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="label">原地旋轉：<span id="valR">0</span></div>
+        <div id="trackR" class="track-h"><div id="thumbR" class="thumb"></div></div>
+      </div>
     </div>
   </div>
 
@@ -97,8 +103,9 @@
     let isWriting = false;
     let pendingPayload = null;
 
-    let currentX = 0; // -100 ~ 100
-    let currentY = 0; // -100 ~ 100
+    let currentX = 0; // 左右平移
+    let currentY = 0; // 前後移動
+    let currentR = 0; // 原地旋轉
     let lastSendTime = 0;
 
     const statusText = document.getElementById('statusText');
@@ -106,12 +113,12 @@
     const stopBtn    = document.getElementById('stopBtn');
     const valXEl     = document.getElementById('valX');
     const valYEl     = document.getElementById('valY');
+    const valREl     = document.getElementById('valR');
 
-    // 傳送 BLE 指令（含防塞車佇列）
     async function sendBLE(text, force = false) {
       if (!rxChar) return;
       const now = Date.now();
-      if (!force && now - lastSendTime < 50) return; // 每 50ms 最多送一次
+      if (!force && now - lastSendTime < 50) return;
       lastSendTime = now;
 
       if (isWriting) {
@@ -142,14 +149,14 @@
     function pushState(force = false) {
       valXEl.textContent = currentX;
       valYEl.textContent = currentY;
-      sendBLE(`${currentX},${currentY}`, force);
+      valREl.textContent = currentR;
+      sendBLE(`${currentX},${currentY},${currentR}`, force);
     }
 
-    // 綁定支援多指觸控的滑桿（放開自動回中）
     function setupSlider(trackEl, thumbEl, isVertical, onChange) {
       const updateFromPointer = (e) => {
         const rect = trackEl.getBoundingClientRect();
-        const maxOffset = (isVertical ? rect.height : rect.width) / 2 - 36;
+        const maxOffset = (isVertical ? rect.height : rect.width) / 2 - 33;
         let offset = isVertical
           ? (e.clientY - (rect.top + rect.height / 2))
           : (e.clientX - (rect.left + rect.width / 2));
@@ -159,14 +166,13 @@
           ? `translate(-50%, calc(-50% + ${offset}px))`
           : `translate(calc(-50% + ${offset}px), -50%)`;
 
-        // 垂直滑桿往上為正 (+100)，水平滑桿往右為正 (+100)
         const ratio = isVertical ? (-offset / maxOffset) : (offset / maxOffset);
         onChange(Math.round(ratio * 100), false);
       };
 
       const reset = () => {
         thumbEl.style.transform = 'translate(-50%, -50%)';
-        onChange(0, true); // 歸零時強制立即送出
+        onChange(0, true);
       };
 
       trackEl.addEventListener('pointerdown', (e) => {
@@ -184,13 +190,15 @@
       currentY = v;
       pushState(force);
     });
-
     setupSlider(document.getElementById('trackX'), document.getElementById('thumbX'), false, (v, force) => {
       currentX = v;
       pushState(force);
     });
+    setupSlider(document.getElementById('trackR'), document.getElementById('thumbR'), false, (v, force) => {
+      currentR = v;
+      pushState(force);
+    });
 
-    // 連線 / 斷線按鈕
     connectBtn.addEventListener('click', async () => {
       if (bleDevice && bleDevice.gatt.connected) {
         bleDevice.gatt.disconnect();
@@ -222,12 +230,9 @@
       }
     });
 
-    // 急停按鈕
     stopBtn.addEventListener('click', () => {
-      currentX = 0;
-      currentY = 0;
-      valXEl.textContent = '0';
-      valYEl.textContent = '0';
+      currentX = 0; currentY = 0; currentR = 0;
+      valXEl.textContent = '0'; valYEl.textContent = '0'; valREl.textContent = '0';
       sendBLE('S', true);
     });
   </script>
