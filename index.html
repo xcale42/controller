@@ -219,8 +219,9 @@
         const service = await server.getPrimaryService(SERVICE_UUID);
         rxChar = await service.getCharacteristic(CHAR_RX_UUID);
 
-        // 連線後立即送出驗證金鑰
-        await sendBLE(`AUTH:${AUTH_TOKEN}`, true);
+        await new Promise(r => setTimeout(r, 200));
+        const authData = new TextEncoder().encode(`K:${AUTH_TOKEN}`);
+        await rxChar.writeValue(authData);
 
         statusText.textContent = '已連線並驗證';
         statusText.classList.add('connected');
