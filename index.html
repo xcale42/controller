@@ -25,7 +25,6 @@
       font-size: 14px; font-weight: 600; cursor: pointer;
     }
     .btn-connect { background: #3b82f6; color: #fff; }
-    .btn-stop { background: #ef4444; color: #fff; }
 
     .controls {
       flex: 1; display: flex; align-items: center; justify-content: space-around;
@@ -72,7 +71,6 @@
   <div class="topbar">
     <button id="connectBtn" class="btn btn-connect">連線 team14</button>
     <div id="statusText" class="status">未連線</div>
-    <button id="stopBtn" class="btn btn-stop">急停</button>
   </div>
 
   <div class="controls">
@@ -97,20 +95,20 @@
   <script>
     const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
     const CHAR_RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+    const AUTH_TOKEN   = 'T14_SECRET_8842'; // 必須與 Arduino 的 AUTH_TOKEN 一致
 
     let bleDevice = null;
     let rxChar = null;
     let isWriting = false;
     let pendingPayload = null;
 
-    let currentX = 0; // 左右平移
-    let currentY = 0; // 前後移動
-    let currentR = 0; // 原地旋轉
+    let currentX = 0;
+    let currentY = 0;
+    let currentR = 0;
     let lastSendTime = 0;
 
     const statusText = document.getElementById('statusText');
     const connectBtn = document.getElementById('connectBtn');
-    const stopBtn    = document.getElementById('stopBtn');
     const valXEl     = document.getElementById('valX');
     const valYEl     = document.getElementById('valY');
     const valREl     = document.getElementById('valR');
@@ -221,19 +219,16 @@
         const service = await server.getPrimaryService(SERVICE_UUID);
         rxChar = await service.getCharacteristic(CHAR_RX_UUID);
 
-        statusText.textContent = '已連線 team14';
+        // 連線後立即送出驗證金鑰
+        await sendBLE(`AUTH:${AUTH_TOKEN}`, true);
+
+        statusText.textContent = '已連線並驗證';
         statusText.classList.add('connected');
         connectBtn.textContent = '斷線';
       } catch (err) {
         statusText.textContent = '連線取消或失敗';
         console.error(err);
       }
-    });
-
-    stopBtn.addEventListener('click', () => {
-      currentX = 0; currentY = 0; currentR = 0;
-      valXEl.textContent = '0'; valYEl.textContent = '0'; valREl.textContent = '0';
-      sendBLE('S', true);
     });
   </script>
 </body>
