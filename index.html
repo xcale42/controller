@@ -215,19 +215,24 @@
           connectBtn.textContent = '連線 team14';
         });
 
+        statusText.textContent = '連線中...';
         const server = await bleDevice.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         rxChar = await service.getCharacteristic(CHAR_RX_UUID);
 
+        // 等待 300ms 讓 iOS BLE 通道就緒，並連送兩次確保送達
+        statusText.textContent = '驗證中...';
+        await new Promise(r => setTimeout(r, 300));
+        await sendBLE(`K:${AUTH_TOKEN}`, true);
         await new Promise(r => setTimeout(r, 200));
-        const authData = new TextEncoder().encode(`K:${AUTH_TOKEN}`);
-        await rxChar.writeValue(authData);
+        await sendBLE(`K:${AUTH_TOKEN}`, true);
 
         statusText.textContent = '已連線並驗證';
         statusText.classList.add('connected');
         connectBtn.textContent = '斷線';
       } catch (err) {
-        statusText.textContent = '連線取消或失敗';
+        // 把實際錯誤原因直接顯示在手機畫面上
+        statusText.textContent = '失敗: ' + err.message;
         console.error(err);
       }
     });
