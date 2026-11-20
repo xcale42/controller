@@ -1,90 +1,335 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>team14 全向遙控器</title>
+  <title>TEAM14 // OMNIDIRECTIONAL CONTROLLER</title>
   <style>
-    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
     body {
-      margin: 0; padding: 14px 18px;
-      height: 100dvh; width: 100vw;
-      background: #121418; color: #f1f5f9;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      display: flex; flex-direction: column; justify-content: space-between;
+      margin: 0;
+      padding: 12px 18px;
+      height: 100dvh;
+      width: 100vw;
+      background: #0a0a0a;
+      color: #f5f5f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace, sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
       overflow: hidden;
     }
+
+    /* ==================== Top Bar ==================== */
     .topbar {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #262626;
     }
-    .status { font-size: 14px; color: #94a3b8; }
-    .status.connected { color: #4ade80; }
+
+    .top-left, .top-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .btn {
-      padding: 8px 16px; border: none; border-radius: 10px;
-      font-size: 14px; font-weight: 600; cursor: pointer;
+      padding: 7px 12px;
+      border: 1px solid #404040;
+      border-radius: 6px;
+      background: #171717;
+      color: #d4d4d4;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
     }
-    .btn-connect { background: #3b82f6; color: #fff; }
 
+    .btn.active {
+      background: #f5f5f5;
+      color: #0a0a0a;
+      border-color: #ffffff;
+    }
+
+    .badge {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #171717;
+      border: 1px solid #2e2e2e;
+      color: #a3a3a3;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .badge.bright {
+      color: #ffffff;
+      border-color: #737373;
+    }
+
+    .badge.low {
+      color: #ffffff;
+      border-style: dashed;
+      border-color: #d4d4d4;
+      background: #262626;
+    }
+
+    .status {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #737373;
+      min-width: 105px;
+      text-align: right;
+    }
+
+    .status.connected {
+      color: #ffffff;
+    }
+
+    /* ==================== Main Fixed 3-Column Grid ==================== */
     .controls {
-      flex: 1; display: flex; align-items: center; justify-content: space-around; gap: 20px;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      justify-items: center;
+      gap: 16px;
+      width: 100%;
     }
-    .right-group {
-      display: flex; flex-direction: column; align-items: center; gap: 18px;
-    }
-    .panel {
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-    }
-    .label { font-size: 13px; color: #cbd5e1; }
 
-    .track-v {
-      position: relative; width: 72px; height: 210px;
-      background: #1e293b; border-radius: 36px; border: 2px solid #334155;
+    .zone-left, .zone-right {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      width: 100%;
     }
+
+    .zone-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: #a3a3a3;
+      white-space: nowrap;
+    }
+
+    .val-num {
+      display: inline-block;
+      width: 3.5ch;
+      text-align: right;
+      color: #f5f5f5;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ==================== Sliders ==================== */
+    .track-v {
+      position: relative;
+      width: 72px;
+      height: 196px;
+      background: #141414;
+      border-radius: 36px;
+      border: 1.5px solid #404040;
+    }
+
     .track-v::before {
-      content: ""; position: absolute; left: 10px; right: 10px; top: 50%;
-      height: 2px; background: #475569; transform: translateY(-50%);
+      content: "";
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: 50%;
+      height: 1.5px;
+      background: #404040;
+      transform: translateY(-50%);
     }
 
     .track-h {
-      position: relative; width: 220px; height: 68px;
-      background: #1e293b; border-radius: 34px; border: 2px solid #334155;
+      position: relative;
+      width: 210px;
+      height: 64px;
+      background: #141414;
+      border-radius: 32px;
+      border: 1.5px solid #404040;
     }
+
     .track-h::before {
-      content: ""; position: absolute; top: 10px; bottom: 10px; left: 50%;
-      width: 2px; background: #475569; transform: translateX(-50%);
+      content: "";
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 50%;
+      width: 1.5px;
+      background: #404040;
+      transform: translateX(-50%);
     }
 
     .thumb {
-      position: absolute; width: 58px; height: 58px;
-      border-radius: 50%; left: 50%; top: 50%;
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      left: 50%;
+      top: 50%;
       transform: translate(-50%, -50%);
       pointer-events: none;
+      background: #e5e5e5;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.22);
     }
-    #thumbY { background: #38bdf8; box-shadow: 0 4px 14px rgba(56, 189, 248, 0.45); }
-    #thumbX { background: #f59e0b; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45); }
-    #thumbR { background: #a855f7; box-shadow: 0 4px 14px rgba(168, 85, 247, 0.45); }
+
+    #thumbR {
+      background: #a3a3a3;
+      border-color: #d4d4d4;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.14);
+    }
+
+    /* ==================== 360-Degree Joystick ==================== */
+    .joy-pad {
+      position: relative;
+      width: 184px;
+      height: 184px;
+      border-radius: 50%;
+      background: #141414;
+      border: 1.5px solid #404040;
+    }
+
+    .joy-pad::before, .joy-pad::after {
+      content: "";
+      position: absolute;
+      background: #2e2e2e;
+      pointer-events: none;
+    }
+
+    .joy-pad::before {
+      left: 16px;
+      right: 16px;
+      top: 50%;
+      height: 1px;
+      transform: translateY(-50%);
+    }
+
+    .joy-pad::after {
+      top: 16px;
+      bottom: 16px;
+      left: 50%;
+      width: 1px;
+      transform: translateX(-50%);
+    }
+
+    .joy-thumb {
+      position: absolute;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      background: #f5f5f5;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 14px rgba(255, 255, 255, 0.28);
+    }
+
+    /* ==================== Action Buttons ==================== */
+    .action-btn {
+      width: 96px;
+      height: 64px;
+      border: 1.5px solid #525252;
+      border-radius: 12px;
+      background: #1c1c1c;
+      color: #f5f5f5;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: transform 0.08s, background 0.08s, color 0.08s, border-color 0.08s;
+    }
+
+    .action-btn.pressed {
+      transform: scale(0.94);
+      background: #ffffff;
+      color: #0a0a0a;
+      border-color: #ffffff;
+    }
+
+    .hidden {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <button id="connectBtn" class="btn btn-connect">連線 team14</button>
-    <div id="statusText" class="status">未連線</div>
+    <div class="top-left">
+      <button id="connectBtn" class="btn">CONNECT</button>
+      <button id="modeBtn" class="btn">MODE: SLIDERS</button>
+      <button id="gyroBtn" class="btn">GYRO: OFF</button>
+    </div>
+    <div class="top-right">
+      <div id="batText" class="badge">12V: --%</div>
+      <div id="statusText" class="status">DISCONNECTED</div>
+    </div>
   </div>
 
   <div class="controls">
-    <div class="panel">
-      <div class="label">前後移動：<span id="valY">0</span></div>
-      <div id="trackY" class="track-v"><div id="thumbY" class="thumb"></div></div>
+    <!-- Left Zone: Vertical Throttle Slider OR 360° Joystick -->
+    <div class="zone-left">
+      <div id="panelY" class="panel">
+        <div class="label">THROTTLE<span id="valY" class="val-num">0</span></div>
+        <div id="trackY" class="track-v"><div id="thumbY" class="thumb"></div></div>
+      </div>
+
+      <div id="panelJoy" class="panel hidden">
+        <div class="label">
+          X<span id="valJoyX" class="val-num">0</span>
+          &nbsp;/&nbsp;
+          Y<span id="valJoyY" class="val-num">0</span>
+        </div>
+        <div id="joyPad" class="joy-pad"><div id="joyThumb" class="joy-thumb"></div></div>
+      </div>
     </div>
 
-    <div class="right-group">
-      <div class="panel">
-        <div class="label">左右平移（配合前後可斜走）：<span id="valX">0</span></div>
+    <!-- Center Zone: Digital Action Outputs -->
+    <div class="zone-center">
+      <button id="fireBtn" class="action-btn">FIRE</button>
+      <button id="defendBtn" class="action-btn">DEFEND</button>
+    </div>
+
+    <!-- Right Zone: Strafe Slider (Sliders Mode only) + Rotate Slider (Always) -->
+    <div class="zone-right">
+      <div id="panelX" class="panel">
+        <div class="label">STRAFE<span id="valX" class="val-num">0</span></div>
         <div id="trackX" class="track-h"><div id="thumbX" class="thumb"></div></div>
       </div>
 
-      <div class="panel">
-        <div class="label">原地旋轉：<span id="valR">0</span></div>
+      <div id="panelR" class="panel">
+        <div class="label">ROTATE<span id="valR" class="val-num">0</span></div>
         <div id="trackR" class="track-h"><div id="thumbR" class="thumb"></div></div>
       </div>
     </div>
@@ -93,32 +338,62 @@
   <script>
     const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
     const CHAR_RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+    const CHAR_TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+    const AUTH_PACKET  = new Uint8Array([0xAA, 0x88, 0x42]);
 
-    // 二進位驗證封包：[0xAA, 0x88, 0x42]
-    const AUTH_PACKET = new Uint8Array([0xAA, 0x88, 0x42]);
-
-    let bleDevice = null;
-    let rxChar = null;
-    let isWriting = false;
-    let pendingBytes = null;
+    let bleDevice      = null;
+    let rxChar         = null;
+    let isWriting      = false;
+    let pendingBytes   = null;
     let heartbeatTimer = null;
 
-    let currentX = 0;
-    let currentY = 0;
-    let currentR = 0;
-    let lastSendTime = 0;
+    let currentX    = 0;
+    let currentY    = 0;
+    let currentR    = 0;
+    let btnFire     = false;
+    let btnDefend   = false;
+    let lastSendMs  = 0;
+    let gyroEnabled = false;
+    let joyMode     = false;
 
-    const statusText = document.getElementById('statusText');
     const connectBtn = document.getElementById('connectBtn');
-    const valXEl     = document.getElementById('valX');
+    const modeBtn    = document.getElementById('modeBtn');
+    const gyroBtn    = document.getElementById('gyroBtn');
+    const batText    = document.getElementById('batText');
+    const statusText = document.getElementById('statusText');
+
+    const panelY     = document.getElementById('panelY');
+    const panelX     = document.getElementById('panelX');
+    const panelJoy   = document.getElementById('panelJoy');
+
     const valYEl     = document.getElementById('valY');
+    const valXEl     = document.getElementById('valX');
     const valREl     = document.getElementById('valR');
+    const valJoyXEl  = document.getElementById('valJoyX');
+    const valJoyYEl  = document.getElementById('valJoyY');
+
+    const trackY     = document.getElementById('trackY');
+    const thumbY     = document.getElementById('thumbY');
+    const trackX     = document.getElementById('trackX');
+    const thumbX     = document.getElementById('thumbX');
+    const trackR     = document.getElementById('trackR');
+    const thumbR     = document.getElementById('thumbR');
+    const joyPad     = document.getElementById('joyPad');
+    const joyThumb   = document.getElementById('joyThumb');
+
+    const fireBtn    = document.getElementById('fireBtn');
+    const defendBtn  = document.getElementById('defendBtn');
+
+    function updateBatteryUI(pct, voltage) {
+      batText.textContent = `12V: ${pct}% (${voltage.toFixed(1)}V)`;
+      batText.className = 'badge ' + (pct > 40 ? 'bright' : pct > 20 ? '' : 'low');
+    }
 
     async function sendBytes(bytes, force = false) {
       if (!rxChar) return;
       const now = Date.now();
-      if (!force && now - lastSendTime < 40) return;
-      lastSendTime = now;
+      if (!force && now - lastSendMs < 40) return;
+      lastSendMs = now;
 
       if (isWriting) {
         pendingBytes = bytes;
@@ -133,7 +408,7 @@
           await rxChar.writeValue(bytes);
         }
       } catch (err) {
-        console.warn('BLE 傳送失敗:', err);
+        console.warn('BLE write failed:', err);
       } finally {
         isWriting = false;
         if (pendingBytes !== null) {
@@ -145,18 +420,116 @@
     }
 
     function sendControl(force = false) {
-      valXEl.textContent = currentX;
-      valYEl.textContent = currentY;
-      valREl.textContent = currentR;
-      // 4 bytes 二進位控制封包：[0xCC, x, y, r]
-      const pkt = new Uint8Array([0xCC, currentX & 0xFF, currentY & 0xFF, currentR & 0xFF]);
+      valXEl.textContent    = currentX;
+      valYEl.textContent    = currentY;
+      valJoyXEl.textContent = currentX;
+      valJoyYEl.textContent = currentY;
+      valREl.textContent    = currentR;
+
+      const flags = (btnFire ? 0x01 : 0x00) | (btnDefend ? 0x02 : 0x00);
+      const pkt = new Uint8Array([
+        0xCC,
+        currentX & 0xFF,
+        currentY & 0xFF,
+        currentR & 0xFF,
+        flags
+      ]);
       sendBytes(pkt, force);
     }
 
+    // ==================== Control Mode Toggle (Sliders vs 360° Joystick) ====================
+    modeBtn.addEventListener('click', () => {
+      joyMode = !joyMode;
+      currentX = 0;
+      currentY = 0;
+
+      thumbX.style.transform   = 'translate(-50%, -50%)';
+      thumbY.style.transform   = 'translate(-50%, -50%)';
+      joyThumb.style.transform = 'translate(-50%, -50%)';
+
+      if (joyMode) {
+        panelY.classList.add('hidden');
+        panelX.classList.add('hidden');
+        panelJoy.classList.remove('hidden');
+        modeBtn.textContent = 'MODE: JOYSTICK';
+        modeBtn.classList.add('active');
+      } else {
+        panelJoy.classList.add('hidden');
+        panelY.classList.remove('hidden');
+        panelX.classList.remove('hidden');
+        modeBtn.textContent = 'MODE: SLIDERS';
+        modeBtn.classList.remove('active');
+      }
+      sendControl(true);
+    });
+
+    // ==================== Action Buttons (Momentary Active HIGH) ====================
+    function setupActionBtn(el, onStateChange) {
+      const press = (e) => {
+        el.setPointerCapture(e.pointerId);
+        el.classList.add('pressed');
+        onStateChange(true);
+      };
+      const release = () => {
+        el.classList.remove('pressed');
+        onStateChange(false);
+      };
+      el.addEventListener('pointerdown', press);
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointercancel', release);
+    }
+
+    setupActionBtn(fireBtn,   (active) => { btnFire   = active; sendControl(true); });
+    setupActionBtn(defendBtn, (active) => { btnDefend = active; sendControl(true); });
+
+    // ==================== 360° Joystick Control ====================
+    function setupJoystick(padEl, thumbEl) {
+      const updateFromPointer = (e) => {
+        const rect = padEl.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const maxRadius = rect.width / 2 - 30;
+
+        let dx = e.clientX - cx;
+        let dy = e.clientY - cy;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > maxRadius) {
+          dx = (dx / dist) * maxRadius;
+          dy = (dy / dist) * maxRadius;
+        }
+
+        thumbEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        currentX = Math.round((dx / maxRadius) * 100);
+        currentY = Math.round((-dy / maxRadius) * 100);
+        sendControl(false);
+      };
+
+      const reset = () => {
+        thumbEl.style.transform = 'translate(-50%, -50%)';
+        currentX = 0;
+        currentY = 0;
+        sendControl(true);
+      };
+
+      padEl.addEventListener('pointerdown', (e) => {
+        padEl.setPointerCapture(e.pointerId);
+        updateFromPointer(e);
+      });
+      padEl.addEventListener('pointermove', (e) => {
+        if (padEl.hasPointerCapture(e.pointerId)) updateFromPointer(e);
+      });
+      padEl.addEventListener('pointerup', reset);
+      padEl.addEventListener('pointercancel', reset);
+    }
+
+    setupJoystick(joyPad, joyThumb);
+
+    // ==================== 1D Sliders ====================
     function setupSlider(trackEl, thumbEl, isVertical, onChange) {
       const updateFromPointer = (e) => {
         const rect = trackEl.getBoundingClientRect();
-        const maxOffset = (isVertical ? rect.height : rect.width) / 2 - 33;
+        const maxOffset = (isVertical ? rect.height : rect.width) / 2 - 30;
         let offset = isVertical
           ? (e.clientY - (rect.top + rect.height / 2))
           : (e.clientX - (rect.left + rect.width / 2));
@@ -186,23 +559,87 @@
       trackEl.addEventListener('pointercancel', reset);
     }
 
-    setupSlider(document.getElementById('trackY'), document.getElementById('thumbY'), true, (v, force) => {
-      currentY = v; sendControl(force);
-    });
-    setupSlider(document.getElementById('trackX'), document.getElementById('thumbX'), false, (v, force) => {
-      currentX = v; sendControl(force);
-    });
-    setupSlider(document.getElementById('trackR'), document.getElementById('thumbR'), false, (v, force) => {
-      currentR = v; sendControl(force);
+    setupSlider(trackY, thumbY, true,  (v, force) => { currentY = v; sendControl(force); });
+    setupSlider(trackX, thumbX, false, (v, force) => { currentX = v; sendControl(force); });
+    setupSlider(trackR, thumbR, false, (v, force) => {
+      if (!gyroEnabled) { currentR = v; sendControl(force); }
     });
 
+    // ==================== Phone Gyroscope Rotation ====================
+    function handleOrientation(e) {
+      if (!gyroEnabled) return;
+
+      const angle = (screen.orientation && screen.orientation.angle !== undefined)
+        ? screen.orientation.angle
+        : (window.orientation || 0);
+
+      let tilt = 0;
+      if (angle === 90) {
+        tilt = e.beta || 0;
+      } else if (angle === 270 || angle === -90) {
+        tilt = -(e.beta || 0);
+      } else {
+        tilt = e.gamma || 0;
+      }
+
+      const deadzone = 8;
+      const maxTilt  = 35;
+
+      let rVal = 0;
+      if (Math.abs(tilt) > deadzone) {
+        const sign = tilt > 0 ? 1 : -1;
+        const norm = Math.min(1, (Math.abs(tilt) - deadzone) / (maxTilt - deadzone));
+        rVal = Math.round(sign * norm * 100);
+      }
+
+      currentR = rVal;
+      const maxOffset = trackR.getBoundingClientRect().width / 2 - 30;
+      const offset = (currentR / 100) * maxOffset;
+      thumbR.style.transform = `translate(calc(-50% + ${offset}px), -50%)`;
+
+      sendControl(false);
+    }
+
+    gyroBtn.addEventListener('click', async () => {
+      if (gyroEnabled) {
+        gyroEnabled = false;
+        window.removeEventListener('deviceorientation', handleOrientation);
+        gyroBtn.textContent = 'GYRO: OFF';
+        gyroBtn.classList.remove('active');
+        currentR = 0;
+        thumbR.style.transform = 'translate(-50%, -50%)';
+        sendControl(true);
+        return;
+      }
+
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== 'granted') {
+            alert('Motion & Orientation permission denied.');
+            return;
+          }
+        } catch (err) {
+          alert('Gyroscope permission error: ' + err.message);
+          return;
+        }
+      }
+
+      gyroEnabled = true;
+      window.addEventListener('deviceorientation', handleOrientation);
+      gyroBtn.textContent = 'GYRO: ON';
+      gyroBtn.classList.add('active');
+    });
+
+    // ==================== BLE Connection ====================
     connectBtn.addEventListener('click', async () => {
       if (bleDevice && bleDevice.gatt.connected) {
         bleDevice.gatt.disconnect();
         return;
       }
+
       try {
-        statusText.textContent = '搜尋中...';
+        statusText.textContent = 'SCANNING...';
         bleDevice = await navigator.bluetooth.requestDevice({
           filters: [{ name: 'team14' }],
           optionalServices: [SERVICE_UUID]
@@ -212,30 +649,44 @@
           rxChar = null;
           clearInterval(heartbeatTimer);
           heartbeatTimer = null;
-          statusText.textContent = '已斷線';
+          btnFire = false;
+          btnDefend = false;
+          statusText.textContent = 'DISCONNECTED';
           statusText.classList.remove('connected');
-          connectBtn.textContent = '連線 team14';
+          batText.textContent = '12V: --%';
+          batText.className = 'badge';
+          connectBtn.textContent = 'CONNECT';
+          connectBtn.classList.remove('active');
         });
 
-        statusText.textContent = '連線中...';
-        const server = await bleDevice.gatt.connect();
+        statusText.textContent = 'CONNECTING...';
+        const server  = await bleDevice.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         rxChar = await service.getCharacteristic(CHAR_RX_UUID);
 
-        statusText.textContent = '驗證中...';
+        const txChar = await service.getCharacteristic(CHAR_TX_UUID);
+        await txChar.startNotifications();
+        txChar.addEventListener('characteristicvaluechanged', (e) => {
+          const dv = e.target.value;
+          if (dv.byteLength === 3 && dv.getUint8(0) === 0xBB) {
+            updateBatteryUI(dv.getUint8(1), dv.getUint8(2) / 10.0);
+          }
+        });
+
+        statusText.textContent = 'AUTHENTICATING...';
         await new Promise(r => setTimeout(r, 250));
         await sendBytes(AUTH_PACKET, true);
         await new Promise(r => setTimeout(r, 150));
         await sendBytes(AUTH_PACKET, true);
 
-        // 啟動 150ms 心跳，配合 ESP32 的 400ms 斷訊煞車保護
         heartbeatTimer = setInterval(() => sendControl(true), 150);
 
-        statusText.textContent = '已連線並驗證';
+        statusText.textContent = 'CONNECTED';
         statusText.classList.add('connected');
-        connectBtn.textContent = '斷線';
+        connectBtn.textContent = 'DISCONNECT';
+        connectBtn.classList.add('active');
       } catch (err) {
-        statusText.textContent = '失敗: ' + err.message;
+        statusText.textContent = 'FAILED';
         console.error(err);
       }
     });
