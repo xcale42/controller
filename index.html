@@ -559,13 +559,49 @@
       trackEl.addEventListener('pointercancel', reset);
     }
 
-    setupSlider(trackY, thumbY, true,  (v, force) => { currentY = v; sendControl(force); });
-    setupSlider(trackX, thumbX, false, (v, force) => { currentX = v; sendControl(force); });
-    setupSlider(trackR, thumbR, false, (v, force) => {
-      if (!gyroEnabled) { currentR = v; sendControl(force); }
-    });
+    setupSlider(trackY, thumbY, true,  (v, force) => { if (!gyroEnabled) { currentY = v; sendControl(force); } });
+    setupSlider(trackX, thumbX, false, (v, force) => { if (!gyroEnabled) { currentX = v; sendControl(force); } });
+    setupSlider(trackR, thumbR, false, (v, force) => { currentR = v; sendControl(force); });
+    
+    // ==================== Phone Gyroscope (2-Axis X/Y Control) ====================
+    let baseRoll  = null;
+    let basePitch = null;
 
-    // ==================== Phone Gyroscope Rotation ====================
+    function applyDeadzone(delta, deadzone = 6, maxTilt = 28) {
+      if (Math.abs(delta) <= deadzone) return 0;
+      const sign = delta > 0 ? 1 : -1;
+      const norm = Math.min(1, (Math.abs(delta) - deadzone) / (maxTilt - deadzone));
+      return Math.round(sign * norm * 100);
+    }
+
+    function syncMoveVisuals(x, y) {
+      if (joyMode) {
+        const rect = joyPad.getBoundingClientRect();
+        if (rect.width > 0) {
+          const maxR = rect.width / 2 - 30;
+          let dx = (x / 100) * maxR;
+          let dy = (-y / 100) * maxR;
+          const dist = Math.hypot(dx, dy);
+          if (dist > maxR) {
+            dx = (dx / dist) * maxR;
+            dy = (dy / dist) * maxR;
+          }
+          joyThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        }
+      } else {
+        const rectX = trackX.getBoundingClientRect();
+        const rectY = trackY.getBoundingClientRect();
+        if (rectX.width > 0) {
+          const offX = (x / 100) * (rectX.width / 2 - 30);
+          thumbX.style.transform = `translate(calc(-50% + ${offX}px), -50%)`;
+        }
+        if (rectY.height > 0) {
+          const offY = (-y / 100) * (rectY.height / 2 - 30);
+          thumbY.style.transform = `translate(-50%, calc(-50% + ${offY}px))`;
+        }
+      }
+    }
+
     function handleOrientation(e) {
       if (!gyroEnabled) return;
 
@@ -573,41 +609,46 @@
         ? screen.orientation.angle
         : (window.orientation || 0);
 
-      let tilt = 0;
+      let roll = 0;
+      let pitch = 0;
+
       if (angle === 90) {
-        tilt = e.beta || 0;
+        roll  = e.beta || 0;
+        pitch = e.gamma || 0;
       } else if (angle === 270 || angle === -90) {
-        tilt = -(e.beta || 0);
+        roll  = -(e.beta || 0);
+        pitch = -(e.gamma || 0);
       } else {
-        tilt = e.gamma || 0;
+        roll  = e.gamma || 0;
+        pitch = -(e.beta || 0);
       }
 
-      const deadzone = 8;
-      const maxTilt  = 35;
-
-      let rVal = 0;
-      if (Math.abs(tilt) > deadzone) {
-        const sign = tilt > 0 ? 1 : -1;
-        const norm = Math.min(1, (Math.abs(tilt) - deadzone) / (maxTilt - deadzone));
-        rVal = Math.round(sign * norm * 100);
+      if (baseRoll === null || basePitch === null) {
+        baseRoll  = roll;
+        basePitch = pitch;
+        return;
       }
 
-      currentR = rVal;
-      const maxOffset = trackR.getBoundingClientRect().width / 2 - 30;
-      const offset = (currentR / 100) * maxOffset;
-      thumbR.style.transform = `translate(calc(-50% + ${offset}px), -50%)`;
+      currentX = applyDeadzone(roll - baseRoll);
+      currentY = applyDeadzone(pitch - basePitch);
 
+      syncMoveVisuals(currentX, currentY);
       sendControl(false);
     }
 
     gyroBtn.addEventListener('click', async () => {
       if (gyroEnabled) {
         gyroEnabled = false;
+        baseRoll = null;
+        basePitch = null;
         window.removeEventListener('deviceorientation', handleOrientation);
         gyroBtn.textContent = 'GYRO: OFF';
         gyroBtn.classList.remove('active');
-        currentR = 0;
-        thumbR.style.transform = 'translate(-50%, -50%)';
+        currentX = 0;
+        currentY = 0;
+        thumbX.style.transform   = 'translate(-50%, -50%)';
+        thumbY.style.transform   = 'translate(-50%, -50%)';
+        joyThumb.style.transform = 'translate(-50%, -50%)';
         sendControl(true);
         return;
       }
@@ -625,6 +666,8 @@
         }
       }
 
+      baseRoll = null;
+      basePitch = null;
       gyroEnabled = true;
       window.addEventListener('deviceorientation', handleOrientation);
       gyroBtn.textContent = 'GYRO: ON';
