@@ -1,604 +1,632 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>TEAM14 // OMNIDIRECTIONAL CONTROLLER</title>
+  <title>Team14 Mecanum Controller</title>
   <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --ok: #22c55e;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+
     * {
       box-sizing: border-box;
       user-select: none;
       -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
       touch-action: none;
     }
 
-    body {
-      margin: 0;
-      padding: 12px 18px;
-      height: 100dvh;
-      width: 100vw;
-      background: #0a0a0a;
-      color: #f5f5f5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace, sans-serif;
+    .app {
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      overflow: hidden;
+      height: 100%;
+      padding: 10px 14px;
+      gap: 10px;
     }
 
-    /* ==================== Top Bar ==================== */
+    /* Top Bar */
     .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #262626;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px;
     }
 
-    .top-left, .top-right {
+    .group {
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .btn {
-      padding: 7px 12px;
-      border: 1px solid #404040;
-      border-radius: 6px;
-      background: #171717;
-      color: #d4d4d4;
-      font-size: 12px;
+    button {
+      background: #334155;
+      color: var(--text);
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
       font-weight: 600;
-      letter-spacing: 0.04em;
       cursor: pointer;
-      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      touch-action: manipulation;
     }
 
-    .btn.active {
-      background: #f5f5f5;
-      color: #0a0a0a;
-      border-color: #ffffff;
-    }
+    button.primary { background: #0284c7; border-color: #38bdf8; }
+    button.active  { background: var(--ok); border-color: #4ade80; color: #052e16; }
+    button.danger  { background: var(--danger); border-color: #f87171; }
+    button:disabled { opacity: 0.45; pointer-events: none; }
 
     .badge {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       padding: 6px 10px;
-      border-radius: 6px;
-      background: #171717;
-      border: 1px solid #2e2e2e;
-      color: #a3a3a3;
+      border-radius: 8px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--muted);
       font-variant-numeric: tabular-nums;
-      white-space: nowrap;
     }
 
-    .badge.bright {
-      color: #ffffff;
-      border-color: #737373;
-    }
+    .badge.ok   { color: #4ade80; border-color: #166534; }
+    .badge.warn { color: #fbbf24; border-color: #92400e; }
+    .badge.low  { color: #f87171; border-color: #991b1b; }
 
-    .badge.low {
-      color: #ffffff;
-      border-style: dashed;
-      border-color: #d4d4d4;
-      background: #262626;
-    }
-
-    .status {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      color: #737373;
-      min-width: 105px;
-      text-align: right;
-    }
-
-    .status.connected {
-      color: #ffffff;
-    }
-
-    /* ==================== Main Fixed 3-Column Grid ==================== */
-    .controls {
+    /* Main Control Area */
+    .main {
       flex: 1;
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      justify-items: center;
-      gap: 16px;
-      width: 100%;
+      gap: 14px;
+      min-height: 0;
     }
 
-    .zone-left, .zone-right {
+    .zone {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 18px;
-      width: 100%;
-    }
-
-    .zone-center {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-    }
-
-    .panel {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
+      gap: 10px;
+      height: 100%;
     }
 
     .label {
       font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      color: #a3a3a3;
-      white-space: nowrap;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 700;
     }
 
-    .val-num {
-      display: inline-block;
-      width: 3.5ch;
-      text-align: right;
-      color: #f5f5f5;
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* ==================== Sliders ==================== */
-    .track-v {
+    /* Sliders & Joystick */
+    .track {
       position: relative;
-      width: 72px;
-      height: 196px;
-      background: #141414;
-      border-radius: 36px;
-      border: 1.5px solid #404040;
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      touch-action: none;
+      transition: opacity 0.2s;
     }
 
-    .track-v::before {
-      content: "";
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      top: 50%;
-      height: 1.5px;
-      background: #404040;
-      transform: translateY(-50%);
-    }
+    .track-v { width: 76px; height: 220px; }
+    .track-h { width: 220px; height: 76px; }
 
-    .track-h {
+    .joy-pad {
       position: relative;
-      width: 210px;
-      height: 64px;
-      background: #141414;
-      border-radius: 32px;
-      border: 1.5px solid #404040;
-    }
-
-    .track-h::before {
-      content: "";
-      position: absolute;
-      top: 12px;
-      bottom: 12px;
-      left: 50%;
-      width: 1.5px;
-      background: #404040;
-      transform: translateX(-50%);
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, #1e293b 60%, #0f172a 100%);
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      touch-action: none;
+      transition: opacity 0.2s;
     }
 
     .thumb {
       position: absolute;
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      left: 50%;
       top: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      background: #e5e5e5;
-      border: 2px solid #ffffff;
-      box-shadow: 0 0 12px rgba(255, 255, 255, 0.22);
-    }
-
-    #thumbR {
-      background: #a3a3a3;
-      border-color: #d4d4d4;
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.14);
-    }
-
-    /* ==================== 360-Degree Joystick ==================== */
-    .joy-pad {
-      position: relative;
-      width: 184px;
-      height: 184px;
-      border-radius: 50%;
-      background: #141414;
-      border: 1.5px solid #404040;
-    }
-
-    .joy-pad::before, .joy-pad::after {
-      content: "";
-      position: absolute;
-      background: #2e2e2e;
-      pointer-events: none;
-    }
-
-    .joy-pad::before {
-      left: 16px;
-      right: 16px;
-      top: 50%;
-      height: 1px;
-      transform: translateY(-50%);
-    }
-
-    .joy-pad::after {
-      top: 16px;
-      bottom: 16px;
       left: 50%;
-      width: 1px;
-      transform: translateX(-50%);
-    }
-
-    .joy-thumb {
-      position: absolute;
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      left: 50%;
-      top: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.55);
       transform: translate(-50%, -50%);
       pointer-events: none;
-      background: #f5f5f5;
-      border: 2px solid #ffffff;
-      box-shadow: 0 0 14px rgba(255, 255, 255, 0.28);
     }
 
-    /* ==================== Action Buttons ==================== */
-    .action-btn {
-      width: 96px;
+    .disabled {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    .hidden { display: none !important; }
+
+    /* Center Action Buttons */
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .act-btn {
+      width: 104px;
       height: 64px;
-      border: 1.5px solid #525252;
-      border-radius: 12px;
-      background: #1c1c1c;
-      color: #f5f5f5;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      cursor: pointer;
-      transition: transform 0.08s, background 0.08s, color 0.08s, border-color 0.08s;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
     }
 
-    .action-btn.pressed {
-      transform: scale(0.94);
-      background: #ffffff;
-      color: #0a0a0a;
-      border-color: #ffffff;
-    }
+    #fireBtn.pressed   { background: var(--danger); border-color: #fca5a5; transform: scale(0.96); }
+    #defendBtn.pressed { background: var(--warn);   border-color: #fde68a; color: #1c1917; transform: scale(0.96); }
 
-    .hidden {
-      display: none !important;
+    .right-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
     }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="top-left">
-      <button id="connectBtn" class="btn">CONNECT</button>
-      <button id="modeBtn" class="btn">MODE: SLIDERS</button>
-      <button id="gyroBtn" class="btn">GYRO: OFF</button>
-    </div>
-    <div class="top-right">
-      <div id="batText" class="badge">12V: --%</div>
-      <div id="statusText" class="status">DISCONNECTED</div>
-    </div>
-  </div>
-
-  <div class="controls">
-    <!-- Left Zone: Vertical Throttle Slider OR 360° Joystick -->
-    <div class="zone-left">
-      <div id="panelY" class="panel">
-        <div class="label">THROTTLE<span id="valY" class="val-num">0</span></div>
-        <div id="trackY" class="track-v"><div id="thumbY" class="thumb"></div></div>
+  <div class="app">
+    <div class="topbar">
+      <div class="group">
+        <button id="connectBtn" class="primary">CONNECT</button>
+        <span id="statusBadge" class="badge">DISCONNECTED</span>
+        <span id="batBadge" class="badge">12V: --% (--.-V)</span>
       </div>
+      <div class="group">
+        <button id="modeBtn">MODE: SLIDER</button>
+        <button id="gyroBtn">GYRO: OFF</button>
+        <button id="rezeroBtn" class="hidden">ZERO</button>
+      </div>
+    </div>
 
-      <div id="panelJoy" class="panel hidden">
-        <div class="label">
-          X<span id="valJoyX" class="val-num">0</span>
-          &nbsp;/&nbsp;
-          Y<span id="valJoyY" class="val-num">0</span>
+    <div class="main">
+      <!-- Left: Throttle (Slider) OR 360° Joystick -->
+      <div class="zone">
+        <div id="leftSliderWrap" class="zone">
+          <div class="label">THROTTLE (Y)</div>
+          <div id="trackY" class="track track-v"><div id="thumbY" class="thumb"></div></div>
         </div>
-        <div id="joyPad" class="joy-pad"><div id="joyThumb" class="joy-thumb"></div></div>
-      </div>
-    </div>
-
-    <!-- Center Zone: Digital Action Outputs -->
-    <div class="zone-center">
-      <button id="fireBtn" class="action-btn">FIRE</button>
-      <button id="defendBtn" class="action-btn">DEFEND</button>
-    </div>
-
-    <!-- Right Zone: Strafe Slider (Sliders Mode only) + Rotate Slider (Always) -->
-    <div class="zone-right">
-      <div id="panelX" class="panel">
-        <div class="label">STRAFE<span id="valX" class="val-num">0</span></div>
-        <div id="trackX" class="track-h"><div id="thumbX" class="thumb"></div></div>
+        <div id="joyWrap" class="zone hidden">
+          <div class="label">360° MOVE (X / Y)</div>
+          <div id="joyPad" class="joy-pad"><div id="joyThumb" class="thumb"></div></div>
+        </div>
       </div>
 
-      <div id="panelR" class="panel">
-        <div class="label">ROTATE<span id="valR" class="val-num">0</span></div>
-        <div id="trackR" class="track-h"><div id="thumbR" class="thumb"></div></div>
+      <!-- Center: Fire & Defend -->
+      <div class="actions">
+        <button id="fireBtn" class="act-btn">FIRE</button>
+        <button id="defendBtn" class="act-btn">DEFEND</button>
+      </div>
+
+      <!-- Right: Strafe (Slider mode) + Rotate (Always available) -->
+      <div class="zone right-stack">
+        <div id="strafeWrap" class="zone">
+          <div class="label">STRAFE (X)</div>
+          <div id="trackX" class="track track-h"><div id="thumbX" class="thumb"></div></div>
+        </div>
+        <div class="zone">
+          <div class="label">ROTATE (R)</div>
+          <div id="trackR" class="track track-h"><div id="thumbR" class="thumb"></div></div>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
+    // ==================== Protocol & BLE Constants ====================
     const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
     const CHAR_RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
     const CHAR_TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
-    const AUTH_PACKET  = new Uint8Array([0xAA, 0x88, 0x42]);
 
-    let bleDevice      = null;
-    let rxChar         = null;
-    let isWriting      = false;
-    let pendingBytes   = null;
-    let heartbeatTimer = null;
+    const PKT_AUTH    = 0xAA;
+    const PKT_BATTERY = 0xBB;
+    const PKT_CONTROL = 0xCC;
+    const AUTH_PACKET = new Uint8Array([PKT_AUTH, 0x88, 0x42]);
 
-    let currentX    = 0;
-    let currentY    = 0;
-    let currentR    = 0;
-    let btnFire     = false;
-    let btnDefend   = false;
-    let lastSendMs  = 0;
+    const LOOP_MS      = 33;   // ~30Hz single control loop
+    const HEARTBEAT_MS = 150;  // Keep-alive interval
+    const MAX_RETRIES  = 3;    // Auto-reconnect cap for Bluefy stability
+
+    // ==================== State ====================
+    const state = { x: 0, y: 0, r: 0, fire: false, defend: false };
+
+    let device = null;
+    let rxChar = null;
+    let txChar = null;
+    let manualDisconnect = false;
+    let retryCount = 0;
+    let wakeLock = null;
+
+    let isWriting = false;
+    let pendingBytes = null;
+    let lastPacketKey = '';
+    let lastSentMs = 0;
+
+    let joyMode = false;
     let gyroEnabled = false;
-    let joyMode     = false;
 
-    const connectBtn = document.getElementById('connectBtn');
-    const modeBtn    = document.getElementById('modeBtn');
-    const gyroBtn    = document.getElementById('gyroBtn');
-    const batText    = document.getElementById('batText');
-    const statusText = document.getElementById('statusText');
+    // ==================== DOM References ====================
+    const connectBtn  = document.getElementById('connectBtn');
+    const statusBadge = document.getElementById('statusBadge');
+    const batBadge    = document.getElementById('batBadge');
+    const modeBtn     = document.getElementById('modeBtn');
+    const gyroBtn     = document.getElementById('gyroBtn');
+    const rezeroBtn   = document.getElementById('rezeroBtn');
 
-    const panelY     = document.getElementById('panelY');
-    const panelX     = document.getElementById('panelX');
-    const panelJoy   = document.getElementById('panelJoy');
+    const leftSliderWrap = document.getElementById('leftSliderWrap');
+    const strafeWrap     = document.getElementById('strafeWrap');
+    const joyWrap        = document.getElementById('joyWrap');
 
-    const valYEl     = document.getElementById('valY');
-    const valXEl     = document.getElementById('valX');
-    const valREl     = document.getElementById('valR');
-    const valJoyXEl  = document.getElementById('valJoyX');
-    const valJoyYEl  = document.getElementById('valJoyY');
+    const trackY = document.getElementById('trackY'), thumbY = document.getElementById('thumbY');
+    const trackX = document.getElementById('trackX'), thumbX = document.getElementById('thumbX');
+    const trackR = document.getElementById('trackR'), thumbR = document.getElementById('thumbR');
+    const joyPad = document.getElementById('joyPad'), joyThumb = document.getElementById('joyThumb');
 
-    const trackY     = document.getElementById('trackY');
-    const thumbY     = document.getElementById('thumbY');
-    const trackX     = document.getElementById('trackX');
-    const thumbX     = document.getElementById('thumbX');
-    const trackR     = document.getElementById('trackR');
-    const thumbR     = document.getElementById('thumbR');
-    const joyPad     = document.getElementById('joyPad');
-    const joyThumb   = document.getElementById('joyThumb');
+    const fireBtn   = document.getElementById('fireBtn');
+    const defendBtn = document.getElementById('defendBtn');
 
-    const fireBtn    = document.getElementById('fireBtn');
-    const defendBtn  = document.getElementById('defendBtn');
+    // ==================== Helpers: Encoding & Shaping ====================
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-    function updateBatteryUI(pct, voltage) {
-      batText.textContent = `12V: ${pct}% (${voltage.toFixed(1)}V)`;
-      batText.className = 'badge ' + (pct > 40 ? 'bright' : pct > 20 ? '' : 'low');
+    // Expo nonlinear curve (small 5% deadzone + 60% square / 40% linear mix)
+    function shapeAxis(v, dz = 0.05) {
+      const a = Math.abs(v);
+      if (a < dz) return 0;
+      const n = (a - dz) / (1 - dz);
+      return Math.round(Math.sign(v) * (0.6 * n * n + 0.4 * n) * 100);
     }
 
-    async function sendBytes(bytes, force = false) {
-      if (!rxChar) return;
-      const now = Date.now();
-      if (!force && now - lastSendMs < 20) return;
-      lastSendMs = now;
+    // [0xCC, x:int8, y:int8, r:int8, flags:u8] (5 bytes, matches ESP32)
+    function encodeControl(s) {
+      const buf = new Uint8Array(5);
+      const dv = new DataView(buf.buffer);
+      buf[0] = PKT_CONTROL;
+      dv.setInt8(1, clamp(s.x, -100, 100));
+      dv.setInt8(2, clamp(s.y, -100, 100));
+      dv.setInt8(3, clamp(s.r, -100, 100));
+      buf[4] = (s.fire ? 1 : 0) | (s.defend ? 2 : 0);
+      return buf;
+    }
 
+    function parseTelemetry(dv) {
+      if (dv.byteLength < 3 || dv.getUint8(0) !== PKT_BATTERY) return;
+      const pct = dv.getUint8(1);
+      const volts = (dv.getUint8(2) / 10).toFixed(1);
+      batBadge.textContent = `12V: ${pct}% (${volts}V)`;
+      batBadge.className = 'badge ' + (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok');
+    }
+
+    // ==================== BLE Write Queue & Single 30Hz Loop ====================
+    async function enqueueWrite(bytes) {
+      if (!rxChar) return;
       if (isWriting) {
         pendingBytes = bytes;
         return;
       }
-
       isWriting = true;
       try {
-        if (rxChar.properties.writeWithoutResponse) {
+        if (rxChar.writeValueWithoutResponse) {
           await rxChar.writeValueWithoutResponse(bytes);
         } else {
           await rxChar.writeValue(bytes);
         }
       } catch (err) {
-        console.warn('BLE write failed:', err);
+        // Ignore transient GATT busy errors; loop/heartbeat will recover
       } finally {
         isWriting = false;
-        if (pendingBytes !== null) {
+        if (pendingBytes) {
           const next = pendingBytes;
           pendingBytes = null;
-          sendBytes(next, true);
+          enqueueWrite(next);
         }
       }
     }
 
-    function sendControl(force = false) {
-      valXEl.textContent    = currentX;
-      valYEl.textContent    = currentY;
-      valJoyXEl.textContent = currentX;
-      valJoyYEl.textContent = currentY;
-      valREl.textContent    = currentR;
+    setInterval(() => {
+      if (!rxChar) return;
+      const pkt = encodeControl(state);
+      const key = pkt.join(',');
+      const now = performance.now();
+      if (key !== lastPacketKey || now - lastSentMs >= HEARTBEAT_MS) {
+        lastPacketKey = key;
+        lastSentMs = now;
+        enqueueWrite(pkt);
+      }
+    }, LOOP_MS);
 
-      const flags = (btnFire ? 0x01 : 0x00) | (btnDefend ? 0x02 : 0x00);
-      const pkt = new Uint8Array([
-        0xCC,
-        currentX & 0xFF,
-        currentY & 0xFF,
-        currentR & 0xFF,
-        flags
-      ]);
-      sendBytes(pkt, force);
+    // ==================== WakeLock & Background Failsafe ====================
+    async function acquireWakeLock() {
+      if (!('wakeLock' in navigator)) return;
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch {}
     }
 
-    // ==================== Control Mode Toggle (Sliders vs 360° Joystick) ====================
-    modeBtn.addEventListener('click', () => {
-      joyMode = !joyMode;
-      currentX = 0;
-      currentY = 0;
-
-      thumbX.style.transform   = 'translate(-50%, -50%)';
-      thumbY.style.transform   = 'translate(-50%, -50%)';
-      joyThumb.style.transform = 'translate(-50%, -50%)';
-
-      if (joyMode) {
-        panelY.classList.add('hidden');
-        panelX.classList.add('hidden');
-        panelJoy.classList.remove('hidden');
-        modeBtn.textContent = 'MODE: JOYSTICK';
-        modeBtn.classList.add('active');
-      } else {
-        panelJoy.classList.add('hidden');
-        panelY.classList.remove('hidden');
-        panelX.classList.remove('hidden');
-        modeBtn.textContent = 'MODE: SLIDERS';
-        modeBtn.classList.remove('active');
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+        wakeLock = null;
       }
-      sendControl(true);
+    }
+
+    function resetAllControls() {
+      state.x = state.y = state.r = 0;
+      state.fire = state.defend = false;
+      [thumbX, thumbY, thumbR, joyThumb].forEach(t => t.style.transform = 'translate(-50%, -50%)');
+      fireBtn.classList.remove('pressed');
+      defendBtn.classList.remove('pressed');
+      if (rxChar) {
+        const pkt = encodeControl(state);
+        lastPacketKey = pkt.join(',');
+        lastSentMs = performance.now();
+        enqueueWrite(pkt);
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        resetAllControls();
+      } else if (rxChar) {
+        acquireWakeLock();
+      }
     });
 
-    // ==================== Action Buttons (Momentary Active HIGH) ====================
-    function setupActionBtn(el, onStateChange) {
-      const press = (e) => {
-        el.setPointerCapture(e.pointerId);
-        el.classList.add('pressed');
-        onStateChange(true);
-      };
-      const release = () => {
-        el.classList.remove('pressed');
-        onStateChange(false);
-      };
-      el.addEventListener('pointerdown', press);
-      el.addEventListener('pointerup', release);
-      el.addEventListener('pointercancel', release);
+    // ==================== BLE Connection & Auto-Reconnect ====================
+    function setStatus(text, cls = '') {
+      statusBadge.textContent = text;
+      statusBadge.className = 'badge ' + cls;
     }
 
-    setupActionBtn(fireBtn,   (active) => { btnFire   = active; sendControl(true); });
-    setupActionBtn(defendBtn, (active) => { btnDefend = active; sendControl(true); });
+    function onTxNotify(e) {
+      parseTelemetry(e.target.value);
+    }
 
-    // ==================== 360° Joystick Control ====================
-    function setupJoystick(padEl, thumbEl) {
-      const updateFromPointer = (e) => {
-        const rect = padEl.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const maxRadius = rect.width / 2 - 30;
+    async function connectGatt(dev) {
+      setStatus('CONNECTING...', 'warn');
+      const server = await dev.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      rxChar = await service.getCharacteristic(CHAR_RX_UUID);
+      txChar = await service.getCharacteristic(CHAR_TX_UUID);
 
-        let dx = e.clientX - cx;
-        let dy = e.clientY - cy;
-        const dist = Math.hypot(dx, dy);
+      // Send application-layer auth packet
+      if (rxChar.writeValueWithoutResponse) {
+        await rxChar.writeValueWithoutResponse(AUTH_PACKET);
+      } else {
+        await rxChar.writeValue(AUTH_PACKET);
+      }
 
-        if (dist > maxRadius) {
-          dx = (dx / dist) * maxRadius;
-          dy = (dy / dist) * maxRadius;
+      txChar.removeEventListener('characteristicvaluechanged', onTxNotify);
+      txChar.addEventListener('characteristicvaluechanged', onTxNotify);
+      await txChar.startNotifications();
+
+      retryCount = 0;
+      lastPacketKey = '';
+      setStatus('CONNECTED', 'ok');
+      connectBtn.textContent = 'DISCONNECT';
+      connectBtn.classList.remove('primary');
+      connectBtn.classList.add('danger');
+      acquireWakeLock();
+    }
+
+    // Named listener registered only once per device
+    function onDisconnected() {
+      rxChar = null;
+      txChar = null;
+      isWriting = false;
+      pendingBytes = null;
+      releaseWakeLock();
+
+      if (manualDisconnect || !device) {
+        setStatus('DISCONNECTED');
+        connectBtn.textContent = 'CONNECT';
+        connectBtn.classList.remove('danger');
+        connectBtn.classList.add('primary');
+        return;
+      }
+
+      if (retryCount < MAX_RETRIES) {
+        retryCount++;
+        const delayMs = 600 * Math.pow(2, retryCount - 1);
+        setStatus(`RECONNECTING (${retryCount}/${MAX_RETRIES})`, 'warn');
+        setTimeout(() => {
+          if (!manualDisconnect && device && !device.gatt.connected) {
+            connectGatt(device).catch(() => onDisconnected());
+          }
+        }, delayMs);
+      } else {
+        setStatus('DISCONNECTED', 'low');
+        connectBtn.textContent = 'CONNECT';
+        connectBtn.classList.remove('danger');
+        connectBtn.classList.add('primary');
+      }
+    }
+
+    connectBtn.addEventListener('click', async () => {
+      if (device && device.gatt.connected) {
+        manualDisconnect = true;
+        resetAllControls();
+        device.gatt.disconnect();
+        return;
+      }
+
+      try {
+        manualDisconnect = false;
+        if (!device) {
+          device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [SERVICE_UUID] }]
+          });
+          device.addEventListener('gattserverdisconnected', onDisconnected);
+        }
+        await connectGatt(device);
+      } catch (err) {
+        setStatus('DISCONNECTED');
+        console.error('BLE error:', err);
+      }
+    });
+
+    // ==================== Unified Pad Component (1D Sliders + 2D Joystick) ====================
+    function setupPad(el, thumb, { lockX = false, lockY = false, onChange }) {
+      let activeId = null;
+      let rect = null;
+      let maxRx = 1, maxRy = 1;
+
+      const update = (e) => {
+        let dx = lockX ? 0 : e.clientX - (rect.left + rect.width / 2);
+        let dy = lockY ? 0 : e.clientY - (rect.top + rect.height / 2);
+
+        if (!lockX && !lockY) {
+          const d = Math.hypot(dx, dy);
+          if (d > maxRx) {
+            dx *= maxRx / d;
+            dy *= maxRx / d;
+          }
+        } else {
+          dx = clamp(dx, -maxRx, maxRx);
+          dy = clamp(dy, -maxRy, maxRy);
         }
 
-        thumbEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-        currentX = Math.round((dx / maxRadius) * 100);
-        currentY = Math.round((-dy / maxRadius) * 100);
-        sendControl(false);
+        thumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        onChange(lockX ? 0 : dx / maxRx, lockY ? 0 : -dy / maxRy);
       };
 
-      const reset = () => {
-        thumbEl.style.transform = 'translate(-50%, -50%)';
-        currentX = 0;
-        currentY = 0;
-        sendControl(true);
+      el.addEventListener('pointerdown', (e) => {
+        if (activeId !== null) return;
+        activeId = e.pointerId;
+        el.setPointerCapture(activeId);
+        rect = el.getBoundingClientRect();
+        const thumbR = (thumb.offsetWidth || 56) / 2;
+        maxRx = Math.max(1, rect.width / 2 - thumbR);
+        maxRy = Math.max(1, rect.height / 2 - thumbR);
+        update(e);
+      });
+
+      el.addEventListener('pointermove', (e) => {
+        if (e.pointerId === activeId) update(e);
+      });
+
+      const end = (e) => {
+        if (e.pointerId !== activeId) return;
+        activeId = null;
+        thumb.style.transform = 'translate(-50%, -50%)';
+        onChange(0, 0);
       };
 
-      padEl.addEventListener('pointerdown', (e) => {
-        padEl.setPointerCapture(e.pointerId);
-        updateFromPointer(e);
-      });
-      padEl.addEventListener('pointermove', (e) => {
-        if (padEl.hasPointerCapture(e.pointerId)) updateFromPointer(e);
-      });
-      padEl.addEventListener('pointerup', reset);
-      padEl.addEventListener('pointercancel', reset);
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
     }
 
-    setupJoystick(joyPad, joyThumb);
+    setupPad(trackY, thumbY, { lockX: true,  onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
+    setupPad(trackX, thumbX, { lockY: true,  onChange: (nx, _) => { if (!gyroEnabled) state.x = shapeAxis(nx); } });
+    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { state.r = shapeAxis(nx); } });
+    setupPad(joyPad, joyThumb, {
+      onChange: (nx, ny) => {
+        if (!gyroEnabled) {
+          state.x = shapeAxis(nx);
+          state.y = shapeAxis(ny);
+        }
+      }
+    });
 
-    // ==================== 1D Sliders ====================
-    function setupSlider(trackEl, thumbEl, isVertical, onChange) {
-      const updateFromPointer = (e) => {
-        const rect = trackEl.getBoundingClientRect();
-        const maxOffset = (isVertical ? rect.height : rect.width) / 2 - 30;
-        let offset = isVertical
-          ? (e.clientY - (rect.top + rect.height / 2))
-          : (e.clientX - (rect.left + rect.width / 2));
-
-        offset = Math.max(-maxOffset, Math.min(maxOffset, offset));
-        thumbEl.style.transform = isVertical
-          ? `translate(-50%, calc(-50% + ${offset}px))`
-          : `translate(calc(-50% + ${offset}px), -50%)`;
-
-        const ratio = isVertical ? (-offset / maxOffset) : (offset / maxOffset);
-        onChange(Math.round(ratio * 100), false);
-      };
-
-      const reset = () => {
-        thumbEl.style.transform = 'translate(-50%, -50%)';
-        onChange(0, true);
-      };
-
-      trackEl.addEventListener('pointerdown', (e) => {
-        trackEl.setPointerCapture(e.pointerId);
-        updateFromPointer(e);
+    // ==================== Action Buttons (Fire / Defend) ====================
+    function setupActionBtn(btn, key) {
+      let activeId = null;
+      btn.addEventListener('pointerdown', (e) => {
+        if (activeId !== null) return;
+        activeId = e.pointerId;
+        btn.setPointerCapture(activeId);
+        state[key] = true;
+        btn.classList.add('pressed');
       });
-      trackEl.addEventListener('pointermove', (e) => {
-        if (trackEl.hasPointerCapture(e.pointerId)) updateFromPointer(e);
-      });
-      trackEl.addEventListener('pointerup', reset);
-      trackEl.addEventListener('pointercancel', reset);
+      const release = (e) => {
+        if (e.pointerId !== activeId) return;
+        activeId = null;
+        state[key] = false;
+        btn.classList.remove('pressed');
+      };
+      btn.addEventListener('pointerup', release);
+      btn.addEventListener('pointercancel', release);
     }
 
-    setupSlider(trackY, thumbY, true,  (v, force) => { if (!gyroEnabled) { currentY = v; sendControl(force); } });
-    setupSlider(trackX, thumbX, false, (v, force) => { if (!gyroEnabled) { currentX = v; sendControl(force); } });
-    setupSlider(trackR, thumbR, false, (v, force) => { currentR = v; sendControl(force); });
-    
-    // ==================== Phone Gyroscope (Gravity Vector - No Gimbal Lock) ====================
-    let baseGx   = null;
-    let baseGy   = null;
-    let smoothGx = 0;
-    let smoothGy = 0;
+    setupActionBtn(fireBtn, 'fire');
+    setupActionBtn(defendBtn, 'defend');
 
-    function applyGravityDeadzone(delta, deadzone = 1.0, maxVal = 4.5) {
-      if (Math.abs(delta) <= deadzone) return 0;
-      const sign = delta > 0 ? 1 : -1;
-      const norm = Math.min(1, (Math.abs(delta) - deadzone) / (maxVal - deadzone));
-      return Math.round(sign * norm * 100);
+    // ==================== Mode Switch (Slider <-> 360° Joy) ====================
+    modeBtn.addEventListener('click', () => {
+      joyMode = !joyMode;
+      modeBtn.textContent = joyMode ? 'MODE: 360° JOY' : 'MODE: SLIDER';
+      leftSliderWrap.classList.toggle('hidden', joyMode);
+      strafeWrap.classList.toggle('hidden', joyMode);
+      joyWrap.classList.toggle('hidden', !joyMode);
+      if (!gyroEnabled) {
+        state.x = 0;
+        state.y = 0;
+      }
+    });
+
+    // ==================== Gyroscope (Tilt Degrees + dt Filtering) ====================
+    let baseTiltX = null, baseTiltY = null;
+    let smoothTiltX = 0, smoothTiltY = 0;
+    let lastMotionMs = 0;
+    const GYRO_TAU_MS = 80; // Time constant for exponential smoothing
+
+    function accelToDeg(a) {
+      return Math.asin(clamp(a / 9.81, -1, 1)) * (180 / Math.PI);
+    }
+
+    function shapeGyroDeg(deltaDeg, dzDeg = 5, maxDeg = 25) {
+      const a = Math.abs(deltaDeg);
+      if (a <= dzDeg) return 0;
+      const n = clamp((a - dzDeg) / (maxDeg - dzDeg), 0, 1);
+      return Math.round(Math.sign(deltaDeg) * (0.6 * n * n + 0.4 * n) * 100);
     }
 
     function syncMoveVisuals(x, y) {
       if (joyMode) {
         const rect = joyPad.getBoundingClientRect();
         if (rect.width > 0) {
-          const maxR = rect.width / 2 - 30;
+          const maxR = rect.width / 2 - (joyThumb.offsetWidth || 56) / 2;
           let dx = (x / 100) * maxR;
           let dy = (-y / 100) * maxR;
-          const dist = Math.hypot(dx, dy);
-          if (dist > maxR) {
-            dx = (dx / dist) * maxR;
-            dy = (dy / dist) * maxR;
-          }
+          const d = Math.hypot(dx, dy);
+          if (d > maxR) { dx *= maxR / d; dy *= maxR / d; }
           joyThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
         }
       } else {
-        const rectX = trackX.getBoundingClientRect();
-        const rectY = trackY.getBoundingClientRect();
-        if (rectX.width > 0) {
-          const offX = (x / 100) * (rectX.width / 2 - 30);
+        const rx = trackX.getBoundingClientRect();
+        const ry = trackY.getBoundingClientRect();
+        if (rx.width > 0) {
+          const offX = (x / 100) * (rx.width / 2 - (thumbX.offsetWidth || 56) / 2);
           thumbX.style.transform = `translate(calc(-50% + ${offX}px), -50%)`;
         }
-        if (rectY.height > 0) {
-          const offY = (-y / 100) * (rectY.height / 2 - 30);
+        if (ry.height > 0) {
+          const offY = (-y / 100) * (ry.height / 2 - (thumbY.offsetHeight || 56) / 2);
           thumbY.style.transform = `translate(-50%, calc(-50% + ${offY}px))`;
         }
       }
@@ -613,51 +641,61 @@
         ? screen.orientation.angle
         : (window.orientation || 0);
 
-      let rawX = 0;
-      let rawY = 0;
+      let rawAx = 0, rawAy = 0;
       if (angle === 90) {
-        rawX = -ag.y;
-        rawY = ag.z;
+        rawAx = -ag.y; rawAy = ag.z;
       } else if (angle === 270 || angle === -90) {
-        rawX = ag.y;
-        rawY = ag.z;
+        rawAx = ag.y;  rawAy = ag.z;
       } else {
-        rawX = ag.x;
-        rawY = ag.z;
+        rawAx = ag.x;  rawAy = ag.z;
       }
 
-      if (baseGx === null || baseGy === null) {
-        baseGx   = rawX;
-        baseGy   = rawY;
-        smoothGx = rawX;
-        smoothGy = rawY;
+      const degX = accelToDeg(rawAx);
+      const degY = accelToDeg(rawAy);
+      const now = performance.now();
+
+      if (baseTiltX === null || baseTiltY === null) {
+        baseTiltX = smoothTiltX = degX;
+        baseTiltY = smoothTiltY = degY;
+        lastMotionMs = now;
         return;
       }
 
-      smoothGx = smoothGx * 0.7 + rawX * 0.3;
-      smoothGy = smoothGy * 0.7 + rawY * 0.3;
+      const dt = clamp(now - lastMotionMs, 1, 200);
+      lastMotionMs = now;
+      const alpha = 1 - Math.exp(-dt / GYRO_TAU_MS);
 
-      currentX = -applyGravityDeadzone(smoothGx - baseGx);
-      currentY = applyGravityDeadzone(smoothGy - baseGy);
+      smoothTiltX += alpha * (degX - smoothTiltX);
+      smoothTiltY += alpha * (degY - smoothTiltY);
 
-      syncMoveVisuals(currentX, currentY);
-      sendControl(false);
+      state.x = shapeGyroDeg(smoothTiltX - baseTiltX);
+      state.y = shapeGyroDeg(smoothTiltY - baseTiltY);
+      syncMoveVisuals(state.x, state.y);
     }
+
+    function setXYTouchDisabled(disabled) {
+      trackX.classList.toggle('disabled', disabled);
+      trackY.classList.toggle('disabled', disabled);
+      joyPad.classList.toggle('disabled', disabled);
+    }
+
+    rezeroBtn.addEventListener('click', () => {
+      baseTiltX = null;
+      baseTiltY = null;
+    });
 
     gyroBtn.addEventListener('click', async () => {
       if (gyroEnabled) {
         gyroEnabled = false;
-        baseGx = null;
-        baseGy = null;
+        baseTiltX = baseTiltY = null;
         window.removeEventListener('devicemotion', handleMotion);
         gyroBtn.textContent = 'GYRO: OFF';
         gyroBtn.classList.remove('active');
-        currentX = 0;
-        currentY = 0;
-        thumbX.style.transform   = 'translate(-50%, -50%)';
-        thumbY.style.transform   = 'translate(-50%, -50%)';
-        joyThumb.style.transform = 'translate(-50%, -50%)';
-        sendControl(true);
+        rezeroBtn.classList.add('hidden');
+        setXYTouchDisabled(false);
+        state.x = 0;
+        state.y = 0;
+        syncMoveVisuals(0, 0);
         return;
       }
 
@@ -674,78 +712,13 @@
         }
       }
 
-      baseGx = null;
-      baseGy = null;
+      baseTiltX = baseTiltY = null;
       gyroEnabled = true;
       window.addEventListener('devicemotion', handleMotion);
       gyroBtn.textContent = 'GYRO: ON';
       gyroBtn.classList.add('active');
-    });
-
-    // ==================== BLE Connection ====================
-    connectBtn.addEventListener('click', async () => {
-      if (bleDevice && bleDevice.gatt.connected) {
-        bleDevice.gatt.disconnect();
-        return;
-      }
-
-      try {
-        statusText.textContent = 'SCANNING...';
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'team14' }],
-          optionalServices: [SERVICE_UUID]
-        });
-
-        bleDevice.addEventListener('gattserverdisconnected', () => {
-          rxChar = null;
-          clearInterval(heartbeatTimer);
-          heartbeatTimer = null;
-          btnFire = false;
-          btnDefend = false;
-          statusText.textContent = 'DISCONNECTED';
-          statusText.classList.remove('connected');
-          batText.textContent = '12V: --%';
-          batText.className = 'badge';
-          connectBtn.textContent = 'CONNECT';
-          connectBtn.classList.remove('active');
-        });
-
-        statusText.textContent = 'CONNECTING...';
-        const server  = await bleDevice.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        rxChar = await service.getCharacteristic(CHAR_RX_UUID);
-
-        statusText.textContent = 'PAIRING / AUTH...';
-        let authOk = false;
-        for (let i = 0; i < 20; i++) {
-          try {
-            await rxChar.writeValue(AUTH_PACKET);
-            authOk = true;
-            break;
-          } catch (e) {
-            await new Promise(r => setTimeout(r, 500));
-          }
-        }
-        if (!authOk) throw new Error('Pairing/Auth timeout');
-
-        const txChar = await service.getCharacteristic(CHAR_TX_UUID);
-        await txChar.startNotifications();
-        txChar.addEventListener('characteristicvaluechanged', (e) => {
-          const dv = e.target.value;
-          if (dv.byteLength === 3 && dv.getUint8(0) === 0xBB) {
-            updateBatteryUI(dv.getUint8(1), dv.getUint8(2) / 10.0);
-          }
-        });
-
-        heartbeatTimer = setInterval(() => sendControl(true), 150);
-        statusText.textContent = 'CONNECTED';
-        statusText.classList.add('connected');
-        connectBtn.textContent = 'DISCONNECT';
-        connectBtn.classList.add('active');
-      } catch (err) {
-        statusText.textContent = 'FAILED';
-        console.error(err);
-      }
+      rezeroBtn.classList.remove('hidden');
+      setXYTouchDisabled(true);
     });
   </script>
 </body>
