@@ -637,7 +637,7 @@
       smoothGx = smoothGx * 0.7 + rawX * 0.3;
       smoothGy = smoothGy * 0.7 + rawY * 0.3;
 
-      currentX = applyGravityDeadzone(smoothGx - baseGx);
+      currentX = -applyGravityDeadzone(smoothGx - baseGx);
       currentY = applyGravityDeadzone(smoothGy - baseGy);
 
       syncMoveVisuals(currentX, currentY);
