@@ -563,14 +563,16 @@
     setupSlider(trackX, thumbX, false, (v, force) => { if (!gyroEnabled) { currentX = v; sendControl(force); } });
     setupSlider(trackR, thumbR, false, (v, force) => { currentR = v; sendControl(force); });
     
-    // ==================== Phone Gyroscope (2-Axis X/Y Control) ====================
-    let baseRoll  = null;
-    let basePitch = null;
+    // ==================== Phone Gyroscope (Gravity Vector - No Gimbal Lock) ====================
+    let baseGx   = null;
+    let baseGy   = null;
+    let smoothGx = 0;
+    let smoothGy = 0;
 
-    function applyDeadzone(delta, deadzone = 6, maxTilt = 28) {
+    function applyGravityDeadzone(delta, deadzone = 1.0, maxVal = 4.5) {
       if (Math.abs(delta) <= deadzone) return 0;
       const sign = delta > 0 ? 1 : -1;
-      const norm = Math.min(1, (Math.abs(delta) - deadzone) / (maxTilt - deadzone));
+      const norm = Math.min(1, (Math.abs(delta) - deadzone) / (maxVal - deadzone));
       return Math.round(sign * norm * 100);
     }
 
@@ -602,35 +604,41 @@
       }
     }
 
-    function handleOrientation(e) {
+    function handleMotion(e) {
       if (!gyroEnabled) return;
+      const ag = e.accelerationIncludingGravity;
+      if (!ag || ag.x === null || ag.y === null || ag.z === null) return;
 
       const angle = (screen.orientation && screen.orientation.angle !== undefined)
         ? screen.orientation.angle
         : (window.orientation || 0);
 
-      let roll = 0;
-      let pitch = 0;
-
+      let rawX = 0;
+      let rawY = 0;
       if (angle === 90) {
-        roll  = e.beta || 0;
-        pitch = e.gamma || 0;
+        rawX = -ag.y;
+        rawY = ag.z;
       } else if (angle === 270 || angle === -90) {
-        roll  = -(e.beta || 0);
-        pitch = -(e.gamma || 0);
+        rawX = ag.y;
+        rawY = ag.z;
       } else {
-        roll  = e.gamma || 0;
-        pitch = -(e.beta || 0);
+        rawX = ag.x;
+        rawY = ag.z;
       }
 
-      if (baseRoll === null || basePitch === null) {
-        baseRoll  = roll;
-        basePitch = pitch;
+      if (baseGx === null || baseGy === null) {
+        baseGx   = rawX;
+        baseGy   = rawY;
+        smoothGx = rawX;
+        smoothGy = rawY;
         return;
       }
 
-      currentX = applyDeadzone(roll - baseRoll);
-      currentY = applyDeadzone(pitch - basePitch);
+      smoothGx = smoothGx * 0.7 + rawX * 0.3;
+      smoothGy = smoothGy * 0.7 + rawY * 0.3;
+
+      currentX = applyGravityDeadzone(smoothGx - baseGx);
+      currentY = applyGravityDeadzone(smoothGy - baseGy);
 
       syncMoveVisuals(currentX, currentY);
       sendControl(false);
@@ -639,9 +647,9 @@
     gyroBtn.addEventListener('click', async () => {
       if (gyroEnabled) {
         gyroEnabled = false;
-        baseRoll = null;
-        basePitch = null;
-        window.removeEventListener('deviceorientation', handleOrientation);
+        baseGx = null;
+        baseGy = null;
+        window.removeEventListener('devicemotion', handleMotion);
         gyroBtn.textContent = 'GYRO: OFF';
         gyroBtn.classList.remove('active');
         currentX = 0;
@@ -653,11 +661,11 @@
         return;
       }
 
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
-          const res = await DeviceOrientationEvent.requestPermission();
+          const res = await DeviceMotionEvent.requestPermission();
           if (res !== 'granted') {
-            alert('Motion & Orientation permission denied.');
+            alert('Motion permission denied.');
             return;
           }
         } catch (err) {
@@ -666,10 +674,10 @@
         }
       }
 
-      baseRoll = null;
-      basePitch = null;
+      baseGx = null;
+      baseGy = null;
       gyroEnabled = true;
-      window.addEventListener('deviceorientation', handleOrientation);
+      window.addEventListener('devicemotion', handleMotion);
       gyroBtn.textContent = 'GYRO: ON';
       gyroBtn.classList.add('active');
     });
