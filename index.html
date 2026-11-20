@@ -664,6 +664,19 @@
         const service = await server.getPrimaryService(SERVICE_UUID);
         rxChar = await service.getCharacteristic(CHAR_RX_UUID);
 
+        statusText.textContent = 'PAIRING / AUTH...';
+        let authOk = false;
+        for (let i = 0; i < 20; i++) {
+          try {
+            await rxChar.writeValue(AUTH_PACKET);
+            authOk = true;
+            break;
+          } catch (e) {
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
+        if (!authOk) throw new Error('Pairing/Auth timeout');
+
         const txChar = await service.getCharacteristic(CHAR_TX_UUID);
         await txChar.startNotifications();
         txChar.addEventListener('characteristicvaluechanged', (e) => {
@@ -673,15 +686,7 @@
           }
         });
 
-        statusText.textContent = 'AUTHENTICATING...';
-        await new Promise(r => setTimeout(r, 250));
-        await sendBytes(AUTH_PACKET, true);
-        await new Promise(r => setTimeout(r, 150));
-        await sendBytes(AUTH_PACKET, true);
-        await rxChar.writeValue(AUTH_PACKET);
-
         heartbeatTimer = setInterval(() => sendControl(true), 150);
-
         statusText.textContent = 'CONNECTED';
         statusText.classList.add('connected');
         connectBtn.textContent = 'DISCONNECT';
