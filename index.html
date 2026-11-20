@@ -678,6 +678,7 @@
         await sendBytes(AUTH_PACKET, true);
         await new Promise(r => setTimeout(r, 150));
         await sendBytes(AUTH_PACKET, true);
+        await rxChar.writeValue(AUTH_PACKET);
 
         heartbeatTimer = setInterval(() => sendControl(true), 150);
 
