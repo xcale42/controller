@@ -763,7 +763,7 @@
       smoothTiltX += alpha * (degX - smoothTiltX);
       smoothTiltY += alpha * (degY - smoothTiltY);
 
-      state.x = shapeGyroDeg(smoothTiltX - baseTiltX);
+      state.x = -shapeGyroDeg(smoothTiltX - baseTiltX);
       state.y = shapeGyroDeg(smoothTiltY - baseTiltY);
       syncMoveVisuals(state.x, state.y);
     }
