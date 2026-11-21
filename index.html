@@ -750,7 +750,7 @@
       smoothTiltX += alpha * (degX - smoothTiltX);
       smoothTiltY += alpha * (degY - smoothTiltY);
 
-      state.r = shapeGyroDeg(smoothTiltX - baseTiltX);
+      state.r = -shapeGyroDeg(smoothTiltX - baseTiltX);
       state.y = shapeGyroDeg(smoothTiltY - baseTiltY);
       syncGyroVisuals(state.r, state.y);
     }
