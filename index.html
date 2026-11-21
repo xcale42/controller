@@ -632,8 +632,8 @@
     }
 
     setupPad(trackY, thumbY, { lockX: true,  onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
-    setupPad(trackX, thumbX, { lockY: true,  onChange: (nx, _) => { if (!gyroEnabled) state.x = shapeAxis(nx); } });
-    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { state.r = shapeAxis(nx); } });
+    setupPad(trackX, thumbX, { lockY: true,  onChange: (nx, _) => { state.x = shapeAxis(nx); } });
+    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { if (!gyroEnabled) state.r = shapeAxis(nx); } });
     setupPad(joyPad, joyThumb, {
       onChange: (nx, ny) => {
         if (!gyroEnabled) {
@@ -684,17 +684,16 @@
       }
     });
 
-    // ==================== Gyroscope (Tilt Degrees + Stronger Anti-Shake Filter) ====================
+    // ==================== Gyroscope (Y: Throttle, X-Tilt: Rotate) ====================
     let baseTiltX = null, baseTiltY = null;
     let smoothTiltX = 0, smoothTiltY = 0;
     let lastMotionMs = 0;
-    const GYRO_TAU_MS = 160; // Stronger smoothing against hand tremor
+    const GYRO_TAU_MS = 160;
 
     function accelToDeg(a) {
       return Math.asin(clamp(a / 9.81, -1, 1)) * (180 / Math.PI);
     }
 
-    // 8° deadzone, 32° full speed, gentle 75% expo curve
     function shapeGyroDeg(deltaDeg, dzDeg = 8, maxDeg = 32) {
       const a = Math.abs(deltaDeg);
       if (a <= dzDeg) return 0;
@@ -702,28 +701,16 @@
       return Math.round(Math.sign(deltaDeg) * (0.75 * n * n + 0.25 * n) * 100);
     }
 
-    function syncMoveVisuals(x, y) {
-      if (joyMode) {
-        const rect = joyPad.getBoundingClientRect();
-        if (rect.width > 0) {
-          const maxR = rect.width / 2 - (joyThumb.offsetWidth || 46) / 2;
-          let dx = (x / 100) * maxR;
-          let dy = (-y / 100) * maxR;
-          const d = Math.hypot(dx, dy);
-          if (d > maxR) { dx *= maxR / d; dy *= maxR / d; }
-          joyThumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-        }
-      } else {
-        const rx = trackX.getBoundingClientRect();
-        const ry = trackY.getBoundingClientRect();
-        if (rx.width > 0) {
-          const offX = (x / 100) * (rx.width / 2 - (thumbX.offsetWidth || 46) / 2);
-          thumbX.style.transform = `translate(calc(-50% + ${offX}px), -50%)`;
-        }
-        if (ry.height > 0) {
-          const offY = (-y / 100) * (ry.height / 2 - (thumbY.offsetHeight || 46) / 2);
-          thumbY.style.transform = `translate(-50%, calc(-50% + ${offY}px))`;
-        }
+    function syncGyroVisuals(r, y) {
+      const rr = trackR.getBoundingClientRect();
+      const ry = trackY.getBoundingClientRect();
+      if (rr.width > 0) {
+        const offR = (r / 100) * (rr.width / 2 - (thumbR.offsetWidth || 46) / 2);
+        thumbR.style.transform = `translate(calc(-50% + ${offR}px), -50%)`;
+      }
+      if (ry.height > 0) {
+        const offY = (-y / 100) * (ry.height / 2 - (thumbY.offsetHeight || 46) / 2);
+        thumbY.style.transform = `translate(-50%, calc(-50% + ${offY}px))`;
       }
     }
 
@@ -763,14 +750,14 @@
       smoothTiltX += alpha * (degX - smoothTiltX);
       smoothTiltY += alpha * (degY - smoothTiltY);
 
-      state.x = -shapeGyroDeg(smoothTiltX - baseTiltX);
+      state.r = shapeGyroDeg(smoothTiltX - baseTiltX);
       state.y = shapeGyroDeg(smoothTiltY - baseTiltY);
-      syncMoveVisuals(state.x, state.y);
+      syncGyroVisuals(state.r, state.y);
     }
 
-    function setXYTouchDisabled(disabled) {
-      trackX.classList.toggle('disabled', disabled);
+    function setGyroTouchDisabled(disabled) {
       trackY.classList.toggle('disabled', disabled);
+      trackR.classList.toggle('disabled', disabled);
       joyPad.classList.toggle('disabled', disabled);
     }
 
@@ -787,10 +774,10 @@
         gyroBtn.textContent = 'GYRO: OFF';
         gyroBtn.classList.remove('active');
         rezeroBtn.classList.add('hidden');
-        setXYTouchDisabled(false);
-        state.x = 0;
+        setGyroTouchDisabled(false);
+        state.r = 0;
         state.y = 0;
-        syncMoveVisuals(0, 0);
+        syncGyroVisuals(0, 0);
         return;
       }
 
@@ -807,6 +794,15 @@
         }
       }
 
+      if (joyMode) {
+        joyMode = false;
+        modeBtn.textContent = 'MODE: SLIDER';
+        leftSliderWrap.classList.remove('hidden');
+        strafeWrap.classList.remove('hidden');
+        joyWrap.classList.add('hidden');
+        state.x = 0;
+      }
+
       baseTiltX = null;
       baseTiltY = null;
       gyroEnabled = true;
@@ -814,7 +810,7 @@
       gyroBtn.textContent = 'GYRO: ON';
       gyroBtn.classList.add('active');
       rezeroBtn.classList.remove('hidden');
-      setXYTouchDisabled(true);
+      setGyroTouchDisabled(true);
     });
   </script>
 </body>
