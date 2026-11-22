@@ -9,7 +9,6 @@
       --bg: #000000;
       --panel: #111111;
       --border: #3a3a3a;
-      --border-strong: #ffffff;
       --text: #ffffff;
       --muted: #888888;
       --thumb-size: clamp(40px, 12dvh, 52px);
@@ -20,6 +19,7 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     html, body {
@@ -45,10 +45,10 @@
                max(10px, env(safe-area-inset-right))
                max(8px, env(safe-area-inset-bottom))
                max(10px, env(safe-area-inset-left));
-      gap: 8px;
+      gap: 6px;
     }
 
-    /* Top Bar - Single Row, Compact */
+    /* Top Bar */
     .topbar {
       flex: 0 0 auto;
       display: flex;
@@ -83,15 +83,11 @@
       cursor: pointer;
       white-space: nowrap;
       touch-action: manipulation;
+      outline: none;
     }
+    button:focus, button:active { outline: none; }
 
-    button.primary {
-      background: #ffffff;
-      color: #000000;
-      border-color: #ffffff;
-    }
-
-    button.active {
+    button.primary, button.active {
       background: #ffffff;
       color: #000000;
       border-color: #ffffff;
@@ -115,11 +111,71 @@
       color: var(--muted);
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
+      transition: border-color 0.25s ease, color 0.25s ease;
     }
 
     .badge.ok   { color: #ffffff; border-color: #ffffff; }
     .badge.warn { color: #cccccc; border-color: #888888; }
     .badge.low  { color: #ffffff; border-color: #ffffff; border-style: dashed; }
+
+    /* 電量降壓延時期間：邊線顏色變淡 */
+    #batBadge.holding {
+      border-color: #242424;
+    }
+
+    /* Control Area Wrapper */
+    .control-area {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    /* 操控區域中間上方的連線狀態 */
+    .conn-bar {
+      flex: 0 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2px 0 4px;
+    }
+
+    .conn-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid #ef4444;
+      color: #ef4444;
+    }
+
+    .conn-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .conn-status.connected {
+      color: #22c55e;
+      border-color: #22c55e;
+    }
+
+    .conn-status.disconnected {
+      color: #ef4444;
+      border-color: #ef4444;
+    }
+
+    .conn-status.connecting {
+      color: #f59e0b;
+      border-color: #f59e0b;
+    }
 
     /* Main Control Area */
     .main {
@@ -162,18 +218,18 @@
 
     .track-v {
       width: clamp(54px, 14dvh, 70px);
-      height: clamp(130px, 54dvh, 210px);
+      height: clamp(130px, 50dvh, 200px);
     }
 
     .track-h {
       width: clamp(130px, 32vw, 210px);
-      height: clamp(50px, 15dvh, 66px);
+      height: clamp(50px, 14dvh, 66px);
     }
 
     .joy-pad {
       position: relative;
-      width: clamp(140px, 54dvh, 210px);
-      height: clamp(140px, 54dvh, 210px);
+      width: clamp(140px, 50dvh, 200px);
+      height: clamp(140px, 50dvh, 200px);
       background: radial-gradient(circle, #181818 60%, #050505 100%);
       border: 1.5px solid var(--border);
       border-radius: 50%;
@@ -212,7 +268,7 @@
 
     .act-btn {
       width: clamp(82px, 15vw, 108px);
-      height: clamp(46px, 18dvh, 62px);
+      height: clamp(46px, 17dvh, 60px);
       border-radius: 10px;
       font-size: 13px;
       font-weight: 800;
@@ -220,6 +276,8 @@
       background: var(--panel);
       color: #ffffff;
       border: 1.5px solid var(--border);
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .act-btn.pressed {
@@ -243,7 +301,6 @@
     <div class="topbar">
       <div class="group">
         <button id="connectBtn" class="primary">CONNECT</button>
-        <span id="statusBadge" class="badge">DISCONNECTED</span>
         <span id="batBadge" class="badge">12V: --% (--.-V)</span>
       </div>
       <div class="group">
@@ -254,34 +311,43 @@
       </div>
     </div>
 
-    <div class="main">
-      <!-- Left: Throttle (Slider) OR 360° Joystick -->
-      <div class="zone">
-        <div id="leftSliderWrap" class="zone">
-          <div class="label">THROTTLE (Y)</div>
-          <div id="trackY" class="track track-v"><div id="thumbY" class="thumb"></div></div>
-        </div>
-        <div id="joyWrap" class="zone hidden">
-          <div class="label">360° MOVE (X / Y)</div>
-          <div id="joyPad" class="joy-pad"><div id="joyThumb" class="thumb"></div></div>
+    <div class="control-area">
+      <div class="conn-bar">
+        <div id="statusBadge" class="conn-status disconnected">
+          <span class="conn-dot"></span>
+          <span id="statusText">DISCONNECTED</span>
         </div>
       </div>
 
-      <!-- Center: Fire (Toggle) & Defend (Hold) -->
-      <div class="actions">
-        <button id="fireBtn" class="act-btn">FIRE</button>
-        <button id="defendBtn" class="act-btn">DEFEND</button>
-      </div>
-
-      <!-- Right: Strafe (Slider mode) + Rotate (Always available) -->
-      <div class="zone right-stack">
-        <div id="strafeWrap" class="zone">
-          <div class="label">STRAFE (X)</div>
-          <div id="trackX" class="track track-h"><div id="thumbX" class="thumb"></div></div>
-        </div>
+      <div class="main">
+        <!-- Left: Throttle (Slider) OR 360° Joystick -->
         <div class="zone">
-          <div class="label">ROTATE (R)</div>
-          <div id="trackR" class="track track-h"><div id="thumbR" class="thumb"></div></div>
+          <div id="leftSliderWrap" class="zone">
+            <div class="label">THROTTLE (Y)</div>
+            <div id="trackY" class="track track-v"><div id="thumbY" class="thumb"></div></div>
+          </div>
+          <div id="joyWrap" class="zone hidden">
+            <div class="label">360° MOVE (X / Y)</div>
+            <div id="joyPad" class="joy-pad"><div id="joyThumb" class="thumb"></div></div>
+          </div>
+        </div>
+
+        <!-- Center: Fire (Toggle) & Defend (Hold) -->
+        <div class="actions">
+          <button id="fireBtn" class="act-btn">FIRE</button>
+          <button id="defendBtn" class="act-btn">DEFEND</button>
+        </div>
+
+        <!-- Right: Strafe (Slider mode) + Rotate (Always available) -->
+        <div class="zone right-stack">
+          <div id="strafeWrap" class="zone">
+            <div class="label">STRAFE (X)</div>
+            <div id="trackX" class="track track-h"><div id="thumbX" class="thumb"></div></div>
+          </div>
+          <div class="zone">
+            <div class="label">ROTATE (R)</div>
+            <div id="trackR" class="track track-h"><div id="thumbR" class="thumb"></div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -298,9 +364,10 @@
     const PKT_CONTROL = 0xCC;
     const AUTH_PACKET = new Uint8Array([PKT_AUTH, 0x88, 0x42]);
 
-    const LOOP_MS      = 33;   // ~30Hz single control loop
-    const HEARTBEAT_MS = 150;  // Keep-alive interval
-    const MAX_RETRIES  = 3;    // Auto-reconnect cap for Bluefy stability
+    const LOOP_MS        = 33;    // ~30Hz single control loop
+    const HEARTBEAT_MS   = 150;   // Keep-alive interval
+    const BAT_RECOVER_MS = 3000;  // 與 ESP32 同步的降壓回彈延時
+    const MAX_RETRIES    = 3;
 
     // ==================== State ====================
     const state = { x: 0, y: 0, r: 0, fire: false, defend: false };
@@ -316,6 +383,7 @@
     let pendingBytes = null;
     let lastPacketKey = '';
     let lastSentMs = 0;
+    let lastMotorActiveMs = 0;
 
     let joyMode = false;
     let gyroEnabled = false;
@@ -323,6 +391,7 @@
     // ==================== DOM References ====================
     const connectBtn  = document.getElementById('connectBtn');
     const statusBadge = document.getElementById('statusBadge');
+    const statusText  = document.getElementById('statusText');
     const batBadge    = document.getElementById('batBadge');
     const modeBtn     = document.getElementById('modeBtn');
     const gyroBtn     = document.getElementById('gyroBtn');
@@ -356,31 +425,22 @@
       try {
         if (!getFullscreenEl()) {
           const root = document.documentElement;
-          if (root.requestFullscreen) {
-            await root.requestFullscreen();
-          } else if (root.webkitRequestFullscreen) {
-            root.webkitRequestFullscreen();
-          }
+          if (root.requestFullscreen) await root.requestFullscreen();
+          else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
         } else {
-          if (document.exitFullscreen) {
-            await document.exitFullscreen();
-          } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-          }
+          if (document.exitFullscreen) await document.exitFullscreen();
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
         }
-      } catch (err) {
-        // iOS Safari / Bluefy may restrict Fullscreen API
-      }
+      } catch {}
       updateFsBtn();
     });
 
     document.addEventListener('fullscreenchange', updateFsBtn);
     document.addEventListener('webkitfullscreenchange', updateFsBtn);
 
-    // ==================== Helpers: Encoding & Shaping ====================
+    // ==================== Helpers: Encoding, Shaping & Padding ====================
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-    // Expo nonlinear curve (8% deadzone + 70% square / 30% linear mix)
     function shapeAxis(v, dz = 0.08) {
       const a = Math.abs(v);
       if (a < dz) return 0;
@@ -388,7 +448,24 @@
       return Math.round(Math.sign(v) * (0.7 * n * n + 0.3 * n) * 100);
     }
 
-    // [0xCC, x:int8, y:int8, r:int8, flags:u8] (5 bytes, matches ESP32)
+    // 計算滑桿／搖桿最大偏移：保留與靜止側邊相同的距離
+    function getMaxTravel(el, thumb, lockX, lockY) {
+      const rect = el.getBoundingClientRect();
+      const thumbSize = thumb.offsetWidth || 46;
+      if (lockX && !lockY) {
+        // 垂直滑桿：極點距離邊框 = 靜止時左右距離邊框
+        return { maxRx: 1, maxRy: Math.max(1, (rect.height - rect.width) / 2) };
+      }
+      if (lockY && !lockX) {
+        // 水平滑桿：極點距離邊框 = 靜止時上下距離邊框
+        return { maxRx: Math.max(1, (rect.width - rect.height) / 2), maxRy: 1 };
+      }
+      // 360° 圓形搖桿：保留與滑桿側邊一致的內距
+      const refGap = Math.max(6, (trackY.offsetWidth - thumbSize) / 2 || 8);
+      const maxR = Math.max(1, rect.width / 2 - thumbSize / 2 - refGap);
+      return { maxRx: maxR, maxRy: maxR };
+    }
+
     function encodeControl(s) {
       const buf = new Uint8Array(5);
       const dv = new DataView(buf.buffer);
@@ -405,7 +482,8 @@
       const pct = dv.getUint8(1);
       const volts = (dv.getUint8(2) / 10).toFixed(1);
       batBadge.textContent = `12V: ${pct}% (${volts}V)`;
-      batBadge.className = 'badge ' + (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok');
+      const isHolding = batBadge.classList.contains('holding');
+      batBadge.className = 'badge ' + (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok') + (isHolding ? ' holding' : '');
     }
 
     // ==================== BLE Write Queue & Single 30Hz Loop ====================
@@ -422,8 +500,7 @@
         } else {
           await rxChar.writeValue(bytes);
         }
-      } catch (err) {
-        // Ignore transient GATT busy errors; loop/heartbeat will recover
+      } catch {
       } finally {
         isWriting = false;
         if (pendingBytes) {
@@ -435,10 +512,17 @@
     }
 
     setInterval(() => {
+      const now = performance.now();
+      const motorsMoving = state.x !== 0 || state.y !== 0 || state.r !== 0;
+      if (motorsMoving) lastMotorActiveMs = now;
+
+      // 馬達運轉中或停止後 3 秒內：電量邊線變淡
+      const isHolding = rxChar !== null && lastMotorActiveMs > 0 && (now - lastMotorActiveMs < BAT_RECOVER_MS);
+      batBadge.classList.toggle('holding', isHolding);
+
       if (!rxChar) return;
       const pkt = encodeControl(state);
       const key = pkt.join(',');
-      const now = performance.now();
       if (key !== lastPacketKey || now - lastSentMs >= HEARTBEAT_MS) {
         lastPacketKey = key;
         lastSentMs = now;
@@ -479,17 +563,14 @@
     }
 
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        resetAllControls();
-      } else if (rxChar) {
-        acquireWakeLock();
-      }
+      if (document.hidden) resetAllControls();
+      else if (rxChar) acquireWakeLock();
     });
 
     // ==================== BLE Connection & Auto-Reconnect ====================
-    function setStatus(text, cls = '') {
-      statusBadge.textContent = text;
-      statusBadge.className = 'badge ' + cls;
+    function setStatus(text, stateClass = 'disconnected') {
+      statusText.textContent = text;
+      statusBadge.className = 'conn-status ' + stateClass;
     }
 
     function onTxNotify(e) {
@@ -497,7 +578,7 @@
     }
 
     async function connectGatt(dev) {
-      setStatus('CONNECTING...', 'warn');
+      setStatus('CONNECTING...', 'connecting');
       const server = await dev.gatt.connect();
       const service = await server.getPrimaryService(SERVICE_UUID);
       rxChar = await service.getCharacteristic(CHAR_RX_UUID);
@@ -515,7 +596,7 @@
 
       retryCount = 0;
       lastPacketKey = '';
-      setStatus('CONNECTED', 'ok');
+      setStatus('CONNECTED', 'connected');
       connectBtn.textContent = 'DISCONNECT';
       connectBtn.classList.remove('primary');
       connectBtn.classList.add('danger');
@@ -530,10 +611,11 @@
       state.fire = state.defend = false;
       syncFireBtn();
       defendBtn.classList.remove('pressed');
+      batBadge.classList.remove('holding');
       releaseWakeLock();
 
       if (manualDisconnect || !device) {
-        setStatus('DISCONNECTED');
+        setStatus('DISCONNECTED', 'disconnected');
         connectBtn.textContent = 'CONNECT';
         connectBtn.classList.remove('danger');
         connectBtn.classList.add('primary');
@@ -543,14 +625,14 @@
       if (retryCount < MAX_RETRIES) {
         retryCount++;
         const delayMs = 600 * Math.pow(2, retryCount - 1);
-        setStatus(`RECONNECTING (${retryCount}/${MAX_RETRIES})`, 'warn');
+        setStatus(`RECONNECTING (${retryCount}/${MAX_RETRIES})`, 'connecting');
         setTimeout(() => {
           if (!manualDisconnect && device && !device.gatt.connected) {
             connectGatt(device).catch(() => onDisconnected());
           }
         }, delayMs);
       } else {
-        setStatus('DISCONNECTED', 'low');
+        setStatus('DISCONNECTED', 'disconnected');
         connectBtn.textContent = 'CONNECT';
         connectBtn.classList.remove('danger');
         connectBtn.classList.add('primary');
@@ -575,7 +657,7 @@
         }
         await connectGatt(device);
       } catch (err) {
-        setStatus('DISCONNECTED');
+        setStatus('DISCONNECTED', 'disconnected');
         console.error('BLE error:', err);
       }
     });
@@ -610,9 +692,9 @@
         activeId = e.pointerId;
         el.setPointerCapture(activeId);
         rect = el.getBoundingClientRect();
-        const thumbR = (thumb.offsetWidth || 46) / 2;
-        maxRx = Math.max(1, rect.width / 2 - thumbR);
-        maxRy = Math.max(1, rect.height / 2 - thumbR);
+        const limits = getMaxTravel(el, thumb, lockX, lockY);
+        maxRx = limits.maxRx;
+        maxRy = limits.maxRy;
         update(e);
       });
 
@@ -653,6 +735,7 @@
     function setupHoldBtn(btn, key) {
       let activeId = null;
       btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
         if (activeId !== null) return;
         activeId = e.pointerId;
         btn.setPointerCapture(activeId);
@@ -702,16 +785,12 @@
     }
 
     function syncGyroVisuals(r, y) {
-      const rr = trackR.getBoundingClientRect();
-      const ry = trackY.getBoundingClientRect();
-      if (rr.width > 0) {
-        const offR = (r / 100) * (rr.width / 2 - (thumbR.offsetWidth || 46) / 2);
-        thumbR.style.transform = `translate(calc(-50% + ${offR}px), -50%)`;
-      }
-      if (ry.height > 0) {
-        const offY = (-y / 100) * (ry.height / 2 - (thumbY.offsetHeight || 46) / 2);
-        thumbY.style.transform = `translate(-50%, calc(-50% + ${offY}px))`;
-      }
+      const limR = getMaxTravel(trackR, thumbR, false, true);
+      const limY = getMaxTravel(trackY, thumbY, true, false);
+      const offR = (r / 100) * limR.maxRx;
+      const offY = (-y / 100) * limY.maxRy;
+      thumbR.style.transform = `translate(calc(-50% + ${offR}px), -50%)`;
+      thumbY.style.transform = `translate(-50%, calc(-50% + ${offY}px))`;
     }
 
     function handleMotion(e) {
@@ -750,7 +829,7 @@
       smoothTiltX += alpha * (degX - smoothTiltX);
       smoothTiltY += alpha * (degY - smoothTiltY);
 
-      state.r = -shapeGyroDeg(smoothTiltX - baseTiltX);
+      state.r = shapeGyroDeg(smoothTiltX - baseTiltX);
       state.y = shapeGyroDeg(smoothTiltY - baseTiltY);
       syncGyroVisuals(state.r, state.y);
     }
