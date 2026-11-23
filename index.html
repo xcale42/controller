@@ -118,7 +118,6 @@
     .badge.warn { color: #cccccc; border-color: #888888; }
     .badge.low  { color: #ffffff; border-color: #ffffff; border-style: dashed; }
 
-    /* 電量降壓延時期間：邊線顏色變淡 */
     #batBadge.holding {
       border-color: #242424;
     }
@@ -132,7 +131,6 @@
       min-width: 0;
     }
 
-    /* 操控區域中間上方的連線狀態 */
     .conn-bar {
       flex: 0 0 auto;
       display: flex;
@@ -366,7 +364,6 @@
 
     const LOOP_MS        = 33;    // ~30Hz single control loop
     const HEARTBEAT_MS   = 150;   // Keep-alive interval
-    const BAT_RECOVER_MS = 3000;  // 與 ESP32 同步的降壓回彈延時
     const MAX_RETRIES    = 3;
 
     // ==================== State ====================
@@ -383,7 +380,6 @@
     let pendingBytes = null;
     let lastPacketKey = '';
     let lastSentMs = 0;
-    let lastMotorActiveMs = 0;
 
     let joyMode = false;
     let gyroEnabled = false;
@@ -448,19 +444,15 @@
       return Math.round(Math.sign(v) * (0.7 * n * n + 0.3 * n) * 100);
     }
 
-    // 計算滑桿／搖桿最大偏移：保留與靜止側邊相同的距離
     function getMaxTravel(el, thumb, lockX, lockY) {
       const rect = el.getBoundingClientRect();
       const thumbSize = thumb.offsetWidth || 46;
       if (lockX && !lockY) {
-        // 垂直滑桿：極點距離邊框 = 靜止時左右距離邊框
         return { maxRx: 1, maxRy: Math.max(1, (rect.height - rect.width) / 2) };
       }
       if (lockY && !lockX) {
-        // 水平滑桿：極點距離邊框 = 靜止時上下距離邊框
         return { maxRx: Math.max(1, (rect.width - rect.height) / 2), maxRy: 1 };
       }
-      // 360° 圓形搖桿：保留與滑桿側邊一致的內距
       const refGap = Math.max(6, (trackY.offsetWidth - thumbSize) / 2 || 8);
       const maxR = Math.max(1, rect.width / 2 - thumbSize / 2 - refGap);
       return { maxRx: maxR, maxRy: maxR };
@@ -481,9 +473,12 @@
       if (dv.byteLength < 3 || dv.getUint8(0) !== PKT_BATTERY) return;
       const pct = dv.getUint8(1);
       const volts = (dv.getUint8(2) / 10).toFixed(1);
+      const isHolding = dv.byteLength >= 4 && dv.getUint8(3) === 1;
+
       batBadge.textContent = `12V: ${pct}% (${volts}V)`;
-      const isHolding = batBadge.classList.contains('holding');
-      batBadge.className = 'badge ' + (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok') + (isHolding ? ' holding' : '');
+      batBadge.className = 'badge ' +
+        (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok') +
+        (isHolding ? ' holding' : '');
     }
 
     // ==================== BLE Write Queue & Single 30Hz Loop ====================
@@ -512,15 +507,8 @@
     }
 
     setInterval(() => {
-      const now = performance.now();
-      const motorsMoving = state.x !== 0 || state.y !== 0 || state.r !== 0;
-      if (motorsMoving) lastMotorActiveMs = now;
-
-      // 馬達運轉中或停止後 3 秒內：電量邊線變淡
-      const isHolding = rxChar !== null && lastMotorActiveMs > 0 && (now - lastMotorActiveMs < BAT_RECOVER_MS);
-      batBadge.classList.toggle('holding', isHolding);
-
       if (!rxChar) return;
+      const now = performance.now();
       const pkt = encodeControl(state);
       const key = pkt.join(',');
       if (key !== lastPacketKey || now - lastSentMs >= HEARTBEAT_MS) {
