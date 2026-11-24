@@ -707,8 +707,9 @@
     setupPad(joyPad, joyThumb, {
       onChange: (nx, ny) => {
         if (!gyroEnabled) {
-          state.x = shapeAxis(nx);
-          state.y = shapeAxis(ny);
+          const out = shapeJoy(nx, ny);
+          state.x = out.x;
+          state.y = out.y;
         }
       }
     });
@@ -770,6 +771,17 @@
       if (a <= dzDeg) return 0;
       const n = clamp((a - dzDeg) / (maxDeg - dzDeg), 0, 1);
       return Math.round(Math.sign(deltaDeg) * (0.75 * n * n + 0.25 * n) * 100);
+    }
+
+    function shapeJoy(nx, ny, dz = 0.08) {
+      const mag = Math.hypot(nx, ny);
+      if (mag < dz) return { x: 0, y: 0 };
+      const n = clamp((mag - dz) / (1 - dz), 0, 1);
+      const curved = 0.7 * n * n + 0.3 * n;
+      return {
+        x: Math.round((nx / mag) * curved * 100),
+        y: Math.round((ny / mag) * curved * 100)
+      };
     }
 
     function syncGyroVisuals(r, y) {
