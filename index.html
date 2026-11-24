@@ -362,9 +362,9 @@
     const PKT_CONTROL = 0xCC;
     const AUTH_PACKET = new Uint8Array([PKT_AUTH, 0x88, 0x42]);
 
-    const LOOP_MS        = 33;    // ~30Hz single control loop
-    const HEARTBEAT_MS   = 150;   // Keep-alive interval
-    const MAX_RETRIES    = 3;
+    const LOOP_MS      = 33;   // ~30Hz single control loop
+    const HEARTBEAT_MS = 150;  // Keep-alive interval
+    const MAX_RETRIES  = 3;
 
     // ==================== State ====================
     const state = { x: 0, y: 0, r: 0, fire: false, defend: false };
@@ -437,11 +437,24 @@
     // ==================== Helpers: Encoding, Shaping & Padding ====================
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+    // Milder exponential curve for 1D sliders to minimize angle distortion during combined moves
     function shapeAxis(v, dz = 0.08) {
       const a = Math.abs(v);
       if (a < dz) return 0;
       const n = (a - dz) / (1 - dz);
-      return Math.round(Math.sign(v) * (0.7 * n * n + 0.3 * n) * 100);
+      return Math.round(Math.sign(v) * (0.35 * n * n + 0.65 * n) * 100);
+    }
+
+    // Radial magnitude shaping for 2D joystick to preserve exact directional angle
+    function shapeJoy(nx, ny, dz = 0.08) {
+      const mag = Math.hypot(nx, ny);
+      if (mag < dz) return { x: 0, y: 0 };
+      const n = clamp((mag - dz) / (1 - dz), 0, 1);
+      const curved = 0.4 * n * n + 0.6 * n;
+      return {
+        x: Math.round((nx / mag) * curved * 100),
+        y: Math.round((ny / mag) * curved * 100)
+      };
     }
 
     function getMaxTravel(el, thumb, lockX, lockY) {
@@ -485,6 +498,7 @@
     async function enqueueWrite(bytes) {
       if (!rxChar) return;
       if (isWriting) {
+        // Coalesce pending packets to always send the freshest state
         pendingBytes = bytes;
         return;
       }
@@ -572,6 +586,7 @@
       rxChar = await service.getCharacteristic(CHAR_RX_UUID);
       txChar = await service.getCharacteristic(CHAR_TX_UUID);
 
+      // Send application-layer authentication token immediately after connection
       if (rxChar.writeValueWithoutResponse) {
         await rxChar.writeValueWithoutResponse(AUTH_PACKET);
       } else {
@@ -661,6 +676,7 @@
         let dy = lockY ? 0 : e.clientY - (rect.top + rect.height / 2);
 
         if (!lockX && !lockY) {
+          // Clamp 2D joystick thumb to a circular boundary
           const d = Math.hypot(dx, dy);
           if (d > maxRx) {
             dx *= maxRx / d;
@@ -701,9 +717,9 @@
       el.addEventListener('pointercancel', end);
     }
 
-    setupPad(trackY, thumbY, { lockX: true,  onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
-    setupPad(trackX, thumbX, { lockY: true,  onChange: (nx, _) => { state.x = shapeAxis(nx); } });
-    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { if (!gyroEnabled) state.r = shapeAxis(nx); } });
+    setupPad(trackY, thumbY, { lockX: true, onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
+    setupPad(trackX, thumbX, { lockY: true, onChange: (nx, _) => { state.x = shapeAxis(nx); } });
+    setupPad(trackR, thumbR, { lockY: true, onChange: (nx, _) => { if (!gyroEnabled) state.r = shapeAxis(nx); } });
     setupPad(joyPad, joyThumb, {
       onChange: (nx, ny) => {
         if (!gyroEnabled) {
@@ -750,6 +766,9 @@
       leftSliderWrap.classList.toggle('hidden', joyMode);
       strafeWrap.classList.toggle('hidden', joyMode);
       joyWrap.classList.toggle('hidden', !joyMode);
+
+      // Reset translation state and thumb visuals when toggling control modes
+      [thumbX, thumbY, joyThumb].forEach(t => t.style.transform = 'translate(-50%, -50%)');
       if (!gyroEnabled) {
         state.x = 0;
         state.y = 0;
@@ -760,28 +779,18 @@
     let baseTiltX = null, baseTiltY = null;
     let smoothTiltX = 0, smoothTiltY = 0;
     let lastMotionMs = 0;
-    const GYRO_TAU_MS = 160;
+    const GYRO_TAU_MS = 160; // Low-pass filter time constant (ms)
 
     function accelToDeg(a) {
       return Math.asin(clamp(a / 9.81, -1, 1)) * (180 / Math.PI);
     }
 
+    // Balanced response curve for tilt control so combined tilt + strafe remains smooth
     function shapeGyroDeg(deltaDeg, dzDeg = 8, maxDeg = 32) {
       const a = Math.abs(deltaDeg);
       if (a <= dzDeg) return 0;
       const n = clamp((a - dzDeg) / (maxDeg - dzDeg), 0, 1);
-      return Math.round(Math.sign(deltaDeg) * (0.75 * n * n + 0.25 * n) * 100);
-    }
-
-    function shapeJoy(nx, ny, dz = 0.08) {
-      const mag = Math.hypot(nx, ny);
-      if (mag < dz) return { x: 0, y: 0 };
-      const n = clamp((mag - dz) / (1 - dz), 0, 1);
-      const curved = 0.7 * n * n + 0.3 * n;
-      return {
-        x: Math.round((nx / mag) * curved * 100),
-        y: Math.round((ny / mag) * curved * 100)
-      };
+      return Math.round(Math.sign(deltaDeg) * (0.5 * n * n + 0.5 * n) * 100);
     }
 
     function syncGyroVisuals(r, y) {
@@ -815,6 +824,7 @@
       const degY = accelToDeg(rawAy);
       const now = performance.now();
 
+      // Capture initial orientation as neutral zero reference
       if (baseTiltX === null || baseTiltY === null) {
         baseTiltX = smoothTiltX = degX;
         baseTiltY = smoothTiltY = degY;
@@ -873,6 +883,7 @@
         }
       }
 
+      // Force Slider mode when Gyro is enabled so Strafe (X) remains touch-accessible
       if (joyMode) {
         joyMode = false;
         modeBtn.textContent = 'MODE: SLIDER';
