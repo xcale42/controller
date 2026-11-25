@@ -111,18 +111,16 @@
       color: var(--muted);
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
-      transition: border-color 0.25s ease, color 0.25s ease, background 0.25s ease;
+      transition: border-color 0.25s ease, color 0.25s ease;
     }
 
     .badge.ok   { color: #ffffff; border-color: #ffffff; }
     .badge.warn { color: #cccccc; border-color: #888888; }
     .badge.low  { color: #ffffff; border-color: #ffffff; border-style: dashed; }
 
-    /* More visible indicator while battery voltage is still settling */
+    /* Dim battery badge border during voltage recovery hold */
     #batBadge.holding {
-      border-color: #f59e0b;
-      color: #f59e0b;
-      background: #1a1400;
+      border-color: #242424;
     }
 
     /* Control Area Wrapper */
@@ -134,6 +132,7 @@
       min-width: 0;
     }
 
+    /* Connection status centered above the control area */
     .conn-bar {
       flex: 0 0 auto;
       display: flex;
@@ -306,7 +305,7 @@
       </div>
       <div class="group">
         <button id="modeBtn">MODE: SLIDER</button>
-        <button id="gyroBtn">TILT: OFF</button>
+        <button id="gyroBtn">GYRO: OFF</button>
         <button id="rezeroBtn" class="hidden">ZERO</button>
         <button id="fsBtn">FULL</button>
       </div>
@@ -367,6 +366,7 @@
 
     const LOOP_MS        = 33;    // ~30Hz single control loop
     const HEARTBEAT_MS   = 150;   // Keep-alive interval
+    const BAT_RECOVER_MS = 3000;  // Voltage recovery hold duration synced with ESP32
     const MAX_RETRIES    = 3;
 
     // ==================== State ====================
@@ -383,9 +383,10 @@
     let pendingBytes = null;
     let lastPacketKey = '';
     let lastSentMs = 0;
+    let lastMotorActiveMs = 0;
 
     let joyMode = false;
-    let tiltEnabled = false;   // accelerometer-based tilt control (UI label: TILT)
+    let gyroEnabled = false;
 
     // ==================== DOM References ====================
     const connectBtn  = document.getElementById('connectBtn');
@@ -440,27 +441,26 @@
     // ==================== Helpers: Encoding, Shaping & Padding ====================
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-    /**
-     * Shape a single axis with deadzone and mild quadratic curve.
-     * Deadzone slightly reduced (0.06) to improve low-speed feel while still
-     * rejecting small noise; firmware applies its own final deadzone.
-     */
-    function shapeAxis(v, dz = 0.06) {
+    function shapeAxis(v, dz = 0.08) {
       const a = Math.abs(v);
       if (a < dz) return 0;
       const n = (a - dz) / (1 - dz);
       return Math.round(Math.sign(v) * (0.7 * n * n + 0.3 * n) * 100);
     }
 
+    // Compute max thumb travel while preserving uniform edge padding
     function getMaxTravel(el, thumb, lockX, lockY) {
       const rect = el.getBoundingClientRect();
       const thumbSize = thumb.offsetWidth || 46;
       if (lockX && !lockY) {
+        // Vertical slider: top/bottom end gap matches left/right idle gap
         return { maxRx: 1, maxRy: Math.max(1, (rect.height - rect.width) / 2) };
       }
       if (lockY && !lockX) {
+        // Horizontal slider: left/right end gap matches top/bottom idle gap
         return { maxRx: Math.max(1, (rect.width - rect.height) / 2), maxRy: 1 };
       }
+      // 360° circular joystick: maintain the same inner padding as sliders
       const refGap = Math.max(6, (trackY.offsetWidth - thumbSize) / 2 || 8);
       const maxR = Math.max(1, rect.width / 2 - thumbSize / 2 - refGap);
       return { maxRx: maxR, maxRy: maxR };
@@ -481,12 +481,9 @@
       if (dv.byteLength < 3 || dv.getUint8(0) !== PKT_BATTERY) return;
       const pct = dv.getUint8(1);
       const volts = (dv.getUint8(2) / 10).toFixed(1);
-      const isHolding = dv.byteLength >= 4 && dv.getUint8(3) === 1;
-
       batBadge.textContent = `12V: ${pct}% (${volts}V)`;
-      batBadge.className = 'badge ' +
-        (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok') +
-        (isHolding ? ' holding' : '');
+      const isHolding = batBadge.classList.contains('holding');
+      batBadge.className = 'badge ' + (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok') + (isHolding ? ' holding' : '');
     }
 
     // ==================== BLE Write Queue & Single 30Hz Loop ====================
@@ -503,9 +500,7 @@
         } else {
           await rxChar.writeValue(bytes);
         }
-      } catch (err) {
-        // Silently ignore transient write failures; next loop will retry
-        console.warn('BLE write failed:', err);
+      } catch {
       } finally {
         isWriting = false;
         if (pendingBytes) {
@@ -517,8 +512,15 @@
     }
 
     setInterval(() => {
-      if (!rxChar) return;
       const now = performance.now();
+      const motorsMoving = state.x !== 0 || state.y !== 0 || state.r !== 0;
+      if (motorsMoving) lastMotorActiveMs = now;
+
+      // Dim battery border while motors are active or within the 3s recovery window
+      const isHolding = rxChar !== null && lastMotorActiveMs > 0 && (now - lastMotorActiveMs < BAT_RECOVER_MS);
+      batBadge.classList.toggle('holding', isHolding);
+
+      if (!rxChar) return;
       const pkt = encodeControl(state);
       const key = pkt.join(',');
       if (key !== lastPacketKey || now - lastSentMs >= HEARTBEAT_MS) {
@@ -711,15 +713,14 @@
       el.addEventListener('pointercancel', end);
     }
 
-    setupPad(trackY, thumbY, { lockX: true,  onChange: (_, ny) => { if (!tiltEnabled) state.y = shapeAxis(ny); } });
+    setupPad(trackY, thumbY, { lockX: true,  onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
     setupPad(trackX, thumbX, { lockY: true,  onChange: (nx, _) => { state.x = shapeAxis(nx); } });
-    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { if (!tiltEnabled) state.r = shapeAxis(nx); } });
+    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { if (!gyroEnabled) state.r = shapeAxis(nx); } });
     setupPad(joyPad, joyThumb, {
       onChange: (nx, ny) => {
-        if (!tiltEnabled) {
-          const out = shapeJoy(nx, ny);
-          state.x = out.x;
-          state.y = out.y;
+        if (!gyroEnabled) {
+          state.x = shapeAxis(nx);
+          state.y = shapeAxis(ny);
         }
       }
     });
@@ -760,43 +761,30 @@
       leftSliderWrap.classList.toggle('hidden', joyMode);
       strafeWrap.classList.toggle('hidden', joyMode);
       joyWrap.classList.toggle('hidden', !joyMode);
-      if (!tiltEnabled) {
+      if (!gyroEnabled) {
         state.x = 0;
         state.y = 0;
       }
     });
 
-    // ==================== Tilt Control (Accelerometer-based, formerly called Gyro) ====================
-    // Uses accelerationIncludingGravity to estimate device tilt angles.
-    // Y-tilt → throttle, X-tilt → rotate. Strafe remains available via touch.
+    // ==================== Gyroscope (Y: Throttle, X-Tilt: Rotate) ====================
     let baseTiltX = null, baseTiltY = null;
     let smoothTiltX = 0, smoothTiltY = 0;
     let lastMotionMs = 0;
-    const TILT_TAU_MS = 110;   // slightly faster response than original 160 ms
+    const GYRO_TAU_MS = 160;
 
     function accelToDeg(a) {
       return Math.asin(clamp(a / 9.81, -1, 1)) * (180 / Math.PI);
     }
 
-    function shapeTiltDeg(deltaDeg, dzDeg = 8, maxDeg = 32) {
+    function shapeGyroDeg(deltaDeg, dzDeg = 8, maxDeg = 32) {
       const a = Math.abs(deltaDeg);
       if (a <= dzDeg) return 0;
       const n = clamp((a - dzDeg) / (maxDeg - dzDeg), 0, 1);
       return Math.round(Math.sign(deltaDeg) * (0.75 * n * n + 0.25 * n) * 100);
     }
 
-    function shapeJoy(nx, ny, dz = 0.06) {
-      const mag = Math.hypot(nx, ny);
-      if (mag < dz) return { x: 0, y: 0 };
-      const n = clamp((mag - dz) / (1 - dz), 0, 1);
-      const curved = 0.7 * n * n + 0.3 * n;
-      return {
-        x: Math.round((nx / mag) * curved * 100),
-        y: Math.round((ny / mag) * curved * 100)
-      };
-    }
-
-    function syncTiltVisuals(r, y) {
+    function syncGyroVisuals(r, y) {
       const limR = getMaxTravel(trackR, thumbR, false, true);
       const limY = getMaxTravel(trackY, thumbY, true, false);
       const offR = (r / 100) * limR.maxRx;
@@ -806,7 +794,7 @@
     }
 
     function handleMotion(e) {
-      if (!tiltEnabled) return;
+      if (!gyroEnabled) return;
       const ag = e.accelerationIncludingGravity;
       if (!ag || ag.x === null || ag.y === null || ag.z === null) return;
 
@@ -814,16 +802,12 @@
         ? screen.orientation.angle
         : (window.orientation || 0);
 
-      // Map device axes to consistent tilt axes for common orientations
       let rawAx = 0, rawAy = 0;
       if (angle === 90) {
         rawAx = -ag.y; rawAy = ag.z;
       } else if (angle === 270 || angle === -90) {
         rawAx = ag.y;  rawAy = ag.z;
-      } else if (angle === 180) {
-        rawAx = -ag.x; rawAy = -ag.z;
       } else {
-        // 0° (portrait upright) and fallback
         rawAx = ag.x;  rawAy = ag.z;
       }
 
@@ -840,17 +824,17 @@
 
       const dt = clamp(now - lastMotionMs, 1, 200);
       lastMotionMs = now;
-      const alpha = 1 - Math.exp(-dt / TILT_TAU_MS);
+      const alpha = 1 - Math.exp(-dt / GYRO_TAU_MS);
 
       smoothTiltX += alpha * (degX - smoothTiltX);
       smoothTiltY += alpha * (degY - smoothTiltY);
 
-      state.r = -shapeTiltDeg(smoothTiltX - baseTiltX);
-      state.y = shapeTiltDeg(smoothTiltY - baseTiltY);
-      syncTiltVisuals(state.r, state.y);
+      state.r = -shapeGyroDeg(smoothTiltX - baseTiltX);
+      state.y = shapeGyroDeg(smoothTiltY - baseTiltY);
+      syncGyroVisuals(state.r, state.y);
     }
 
-    function setTiltTouchDisabled(disabled) {
+    function setGyroTouchDisabled(disabled) {
       trackY.classList.toggle('disabled', disabled);
       trackR.classList.toggle('disabled', disabled);
       joyPad.classList.toggle('disabled', disabled);
@@ -862,21 +846,20 @@
     });
 
     gyroBtn.addEventListener('click', async () => {
-      if (tiltEnabled) {
-        tiltEnabled = false;
+      if (gyroEnabled) {
+        gyroEnabled = false;
         baseTiltX = baseTiltY = null;
         window.removeEventListener('devicemotion', handleMotion);
-        gyroBtn.textContent = 'TILT: OFF';
+        gyroBtn.textContent = 'GYRO: OFF';
         gyroBtn.classList.remove('active');
         rezeroBtn.classList.add('hidden');
-        setTiltTouchDisabled(false);
+        setGyroTouchDisabled(false);
         state.r = 0;
         state.y = 0;
-        syncTiltVisuals(0, 0);
+        syncGyroVisuals(0, 0);
         return;
       }
 
-      // iOS requires explicit permission for DeviceMotion
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
           const res = await DeviceMotionEvent.requestPermission();
@@ -885,12 +868,11 @@
             return;
           }
         } catch (err) {
-          alert('Tilt permission error: ' + err.message);
+          alert('Gyroscope permission error: ' + err.message);
           return;
         }
       }
 
-      // Force slider mode when enabling tilt (joy pad is hidden)
       if (joyMode) {
         joyMode = false;
         modeBtn.textContent = 'MODE: SLIDER';
@@ -902,12 +884,12 @@
 
       baseTiltX = null;
       baseTiltY = null;
-      tiltEnabled = true;
+      gyroEnabled = true;
       window.addEventListener('devicemotion', handleMotion);
-      gyroBtn.textContent = 'TILT: ON';
+      gyroBtn.textContent = 'GYRO: ON';
       gyroBtn.classList.add('active');
       rezeroBtn.classList.remove('hidden');
-      setTiltTouchDisabled(true);
+      setGyroTouchDisabled(true);
     });
   </script>
 </body>
