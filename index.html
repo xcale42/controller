@@ -111,15 +111,18 @@
       color: var(--muted);
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
-      transition: border-color 0.25s ease, color 0.25s ease;
+      transition: border-color 0.25s ease, color 0.25s ease, background 0.25s ease;
     }
 
     .badge.ok   { color: #ffffff; border-color: #ffffff; }
     .badge.warn { color: #cccccc; border-color: #888888; }
     .badge.low  { color: #ffffff; border-color: #ffffff; border-style: dashed; }
 
+    /* More visible indicator while battery voltage is still settling */
     #batBadge.holding {
-      border-color: #242424;
+      border-color: #f59e0b;
+      color: #f59e0b;
+      background: #1a1400;
     }
 
     /* Control Area Wrapper */
@@ -303,7 +306,7 @@
       </div>
       <div class="group">
         <button id="modeBtn">MODE: SLIDER</button>
-        <button id="gyroBtn">GYRO: OFF</button>
+        <button id="gyroBtn">TILT: OFF</button>
         <button id="rezeroBtn" class="hidden">ZERO</button>
         <button id="fsBtn">FULL</button>
       </div>
@@ -362,9 +365,9 @@
     const PKT_CONTROL = 0xCC;
     const AUTH_PACKET = new Uint8Array([PKT_AUTH, 0x88, 0x42]);
 
-    const LOOP_MS      = 33;   // ~30Hz single control loop
-    const HEARTBEAT_MS = 150;  // Keep-alive interval
-    const MAX_RETRIES  = 3;
+    const LOOP_MS        = 33;    // ~30Hz single control loop
+    const HEARTBEAT_MS   = 150;   // Keep-alive interval
+    const MAX_RETRIES    = 3;
 
     // ==================== State ====================
     const state = { x: 0, y: 0, r: 0, fire: false, defend: false };
@@ -382,7 +385,7 @@
     let lastSentMs = 0;
 
     let joyMode = false;
-    let gyroEnabled = false;
+    let tiltEnabled = false;   // accelerometer-based tilt control (UI label: TILT)
 
     // ==================== DOM References ====================
     const connectBtn  = document.getElementById('connectBtn');
@@ -437,24 +440,16 @@
     // ==================== Helpers: Encoding, Shaping & Padding ====================
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-    // Milder exponential curve for 1D sliders to minimize angle distortion during combined moves
-    function shapeAxis(v, dz = 0.08) {
+    /**
+     * Shape a single axis with deadzone and mild quadratic curve.
+     * Deadzone slightly reduced (0.06) to improve low-speed feel while still
+     * rejecting small noise; firmware applies its own final deadzone.
+     */
+    function shapeAxis(v, dz = 0.06) {
       const a = Math.abs(v);
       if (a < dz) return 0;
       const n = (a - dz) / (1 - dz);
-      return Math.round(Math.sign(v) * (0.35 * n * n + 0.65 * n) * 100);
-    }
-
-    // Radial magnitude shaping for 2D joystick to preserve exact directional angle
-    function shapeJoy(nx, ny, dz = 0.08) {
-      const mag = Math.hypot(nx, ny);
-      if (mag < dz) return { x: 0, y: 0 };
-      const n = clamp((mag - dz) / (1 - dz), 0, 1);
-      const curved = 0.4 * n * n + 0.6 * n;
-      return {
-        x: Math.round((nx / mag) * curved * 100),
-        y: Math.round((ny / mag) * curved * 100)
-      };
+      return Math.round(Math.sign(v) * (0.7 * n * n + 0.3 * n) * 100);
     }
 
     function getMaxTravel(el, thumb, lockX, lockY) {
@@ -498,7 +493,6 @@
     async function enqueueWrite(bytes) {
       if (!rxChar) return;
       if (isWriting) {
-        // Coalesce pending packets to always send the freshest state
         pendingBytes = bytes;
         return;
       }
@@ -509,7 +503,9 @@
         } else {
           await rxChar.writeValue(bytes);
         }
-      } catch {
+      } catch (err) {
+        // Silently ignore transient write failures; next loop will retry
+        console.warn('BLE write failed:', err);
       } finally {
         isWriting = false;
         if (pendingBytes) {
@@ -586,7 +582,6 @@
       rxChar = await service.getCharacteristic(CHAR_RX_UUID);
       txChar = await service.getCharacteristic(CHAR_TX_UUID);
 
-      // Send application-layer authentication token immediately after connection
       if (rxChar.writeValueWithoutResponse) {
         await rxChar.writeValueWithoutResponse(AUTH_PACKET);
       } else {
@@ -676,7 +671,6 @@
         let dy = lockY ? 0 : e.clientY - (rect.top + rect.height / 2);
 
         if (!lockX && !lockY) {
-          // Clamp 2D joystick thumb to a circular boundary
           const d = Math.hypot(dx, dy);
           if (d > maxRx) {
             dx *= maxRx / d;
@@ -717,12 +711,12 @@
       el.addEventListener('pointercancel', end);
     }
 
-    setupPad(trackY, thumbY, { lockX: true, onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
-    setupPad(trackX, thumbX, { lockY: true, onChange: (nx, _) => { state.x = shapeAxis(nx); } });
-    setupPad(trackR, thumbR, { lockY: true, onChange: (nx, _) => { if (!gyroEnabled) state.r = shapeAxis(nx); } });
+    setupPad(trackY, thumbY, { lockX: true,  onChange: (_, ny) => { if (!tiltEnabled) state.y = shapeAxis(ny); } });
+    setupPad(trackX, thumbX, { lockY: true,  onChange: (nx, _) => { state.x = shapeAxis(nx); } });
+    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { if (!tiltEnabled) state.r = shapeAxis(nx); } });
     setupPad(joyPad, joyThumb, {
       onChange: (nx, ny) => {
-        if (!gyroEnabled) {
+        if (!tiltEnabled) {
           const out = shapeJoy(nx, ny);
           state.x = out.x;
           state.y = out.y;
@@ -766,34 +760,43 @@
       leftSliderWrap.classList.toggle('hidden', joyMode);
       strafeWrap.classList.toggle('hidden', joyMode);
       joyWrap.classList.toggle('hidden', !joyMode);
-
-      // Reset translation state and thumb visuals when toggling control modes
-      [thumbX, thumbY, joyThumb].forEach(t => t.style.transform = 'translate(-50%, -50%)');
-      if (!gyroEnabled) {
+      if (!tiltEnabled) {
         state.x = 0;
         state.y = 0;
       }
     });
 
-    // ==================== Gyroscope (Y: Throttle, X-Tilt: Rotate) ====================
+    // ==================== Tilt Control (Accelerometer-based, formerly called Gyro) ====================
+    // Uses accelerationIncludingGravity to estimate device tilt angles.
+    // Y-tilt → throttle, X-tilt → rotate. Strafe remains available via touch.
     let baseTiltX = null, baseTiltY = null;
     let smoothTiltX = 0, smoothTiltY = 0;
     let lastMotionMs = 0;
-    const GYRO_TAU_MS = 160; // Low-pass filter time constant (ms)
+    const TILT_TAU_MS = 110;   // slightly faster response than original 160 ms
 
     function accelToDeg(a) {
       return Math.asin(clamp(a / 9.81, -1, 1)) * (180 / Math.PI);
     }
 
-    // Balanced response curve for tilt control so combined tilt + strafe remains smooth
-    function shapeGyroDeg(deltaDeg, dzDeg = 8, maxDeg = 32) {
+    function shapeTiltDeg(deltaDeg, dzDeg = 8, maxDeg = 32) {
       const a = Math.abs(deltaDeg);
       if (a <= dzDeg) return 0;
       const n = clamp((a - dzDeg) / (maxDeg - dzDeg), 0, 1);
-      return Math.round(Math.sign(deltaDeg) * (0.5 * n * n + 0.5 * n) * 100);
+      return Math.round(Math.sign(deltaDeg) * (0.75 * n * n + 0.25 * n) * 100);
     }
 
-    function syncGyroVisuals(r, y) {
+    function shapeJoy(nx, ny, dz = 0.06) {
+      const mag = Math.hypot(nx, ny);
+      if (mag < dz) return { x: 0, y: 0 };
+      const n = clamp((mag - dz) / (1 - dz), 0, 1);
+      const curved = 0.7 * n * n + 0.3 * n;
+      return {
+        x: Math.round((nx / mag) * curved * 100),
+        y: Math.round((ny / mag) * curved * 100)
+      };
+    }
+
+    function syncTiltVisuals(r, y) {
       const limR = getMaxTravel(trackR, thumbR, false, true);
       const limY = getMaxTravel(trackY, thumbY, true, false);
       const offR = (r / 100) * limR.maxRx;
@@ -803,7 +806,7 @@
     }
 
     function handleMotion(e) {
-      if (!gyroEnabled) return;
+      if (!tiltEnabled) return;
       const ag = e.accelerationIncludingGravity;
       if (!ag || ag.x === null || ag.y === null || ag.z === null) return;
 
@@ -811,12 +814,16 @@
         ? screen.orientation.angle
         : (window.orientation || 0);
 
+      // Map device axes to consistent tilt axes for common orientations
       let rawAx = 0, rawAy = 0;
       if (angle === 90) {
         rawAx = -ag.y; rawAy = ag.z;
       } else if (angle === 270 || angle === -90) {
         rawAx = ag.y;  rawAy = ag.z;
+      } else if (angle === 180) {
+        rawAx = -ag.x; rawAy = -ag.z;
       } else {
+        // 0° (portrait upright) and fallback
         rawAx = ag.x;  rawAy = ag.z;
       }
 
@@ -824,7 +831,6 @@
       const degY = accelToDeg(rawAy);
       const now = performance.now();
 
-      // Capture initial orientation as neutral zero reference
       if (baseTiltX === null || baseTiltY === null) {
         baseTiltX = smoothTiltX = degX;
         baseTiltY = smoothTiltY = degY;
@@ -834,17 +840,17 @@
 
       const dt = clamp(now - lastMotionMs, 1, 200);
       lastMotionMs = now;
-      const alpha = 1 - Math.exp(-dt / GYRO_TAU_MS);
+      const alpha = 1 - Math.exp(-dt / TILT_TAU_MS);
 
       smoothTiltX += alpha * (degX - smoothTiltX);
       smoothTiltY += alpha * (degY - smoothTiltY);
 
-      state.r = -shapeGyroDeg(smoothTiltX - baseTiltX);
-      state.y = shapeGyroDeg(smoothTiltY - baseTiltY);
-      syncGyroVisuals(state.r, state.y);
+      state.r = -shapeTiltDeg(smoothTiltX - baseTiltX);
+      state.y = shapeTiltDeg(smoothTiltY - baseTiltY);
+      syncTiltVisuals(state.r, state.y);
     }
 
-    function setGyroTouchDisabled(disabled) {
+    function setTiltTouchDisabled(disabled) {
       trackY.classList.toggle('disabled', disabled);
       trackR.classList.toggle('disabled', disabled);
       joyPad.classList.toggle('disabled', disabled);
@@ -856,20 +862,21 @@
     });
 
     gyroBtn.addEventListener('click', async () => {
-      if (gyroEnabled) {
-        gyroEnabled = false;
+      if (tiltEnabled) {
+        tiltEnabled = false;
         baseTiltX = baseTiltY = null;
         window.removeEventListener('devicemotion', handleMotion);
-        gyroBtn.textContent = 'GYRO: OFF';
+        gyroBtn.textContent = 'TILT: OFF';
         gyroBtn.classList.remove('active');
         rezeroBtn.classList.add('hidden');
-        setGyroTouchDisabled(false);
+        setTiltTouchDisabled(false);
         state.r = 0;
         state.y = 0;
-        syncGyroVisuals(0, 0);
+        syncTiltVisuals(0, 0);
         return;
       }
 
+      // iOS requires explicit permission for DeviceMotion
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
           const res = await DeviceMotionEvent.requestPermission();
@@ -878,12 +885,12 @@
             return;
           }
         } catch (err) {
-          alert('Gyroscope permission error: ' + err.message);
+          alert('Tilt permission error: ' + err.message);
           return;
         }
       }
 
-      // Force Slider mode when Gyro is enabled so Strafe (X) remains touch-accessible
+      // Force slider mode when enabling tilt (joy pad is hidden)
       if (joyMode) {
         joyMode = false;
         modeBtn.textContent = 'MODE: SLIDER';
@@ -895,12 +902,12 @@
 
       baseTiltX = null;
       baseTiltY = null;
-      gyroEnabled = true;
+      tiltEnabled = true;
       window.addEventListener('devicemotion', handleMotion);
-      gyroBtn.textContent = 'GYRO: ON';
+      gyroBtn.textContent = 'TILT: ON';
       gyroBtn.classList.add('active');
       rezeroBtn.classList.remove('hidden');
-      setGyroTouchDisabled(true);
+      setTiltTouchDisabled(true);
     });
   </script>
 </body>
