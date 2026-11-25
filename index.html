@@ -118,7 +118,7 @@
     .badge.warn { color: #cccccc; border-color: #888888; }
     .badge.low  { color: #ffffff; border-color: #ffffff; border-style: dashed; }
 
-    /* Dim battery badge border during voltage recovery hold */
+    /* Dim battery badge border while ESP32 reports voltage hold/rebound */
     #batBadge.holding {
       border-color: #242424;
     }
@@ -359,15 +359,11 @@
     const CHAR_RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
     const CHAR_TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
-    const PKT_AUTH    = 0xAA;
-    const PKT_BATTERY = 0xBB;
-    const PKT_CONTROL = 0xCC;
-    const AUTH_PACKET = new Uint8Array([PKT_AUTH, 0x88, 0x42]);
+    const PKT_BATTERY = 0xBB; // [0xBB, pct, vX10, isHolding]
+    const PKT_CONTROL = 0xCC; // [0xCC, x, y, r, flags]
 
-    const LOOP_MS        = 33;    // ~30Hz single control loop
-    const HEARTBEAT_MS   = 150;   // Keep-alive interval
-    const BAT_RECOVER_MS = 3000;  // Voltage recovery hold duration synced with ESP32
-    const MAX_RETRIES    = 3;
+    const LOOP_MS      = 33;  // ~30Hz control loop
+    const HEARTBEAT_MS = 150; // Keep-alive interval
 
     // ==================== State ====================
     const state = { x: 0, y: 0, r: 0, fire: false, defend: false };
@@ -375,15 +371,12 @@
     let device = null;
     let rxChar = null;
     let txChar = null;
-    let manualDisconnect = false;
-    let retryCount = 0;
     let wakeLock = null;
 
     let isWriting = false;
     let pendingBytes = null;
     let lastPacketKey = '';
     let lastSentMs = 0;
-    let lastMotorActiveMs = 0;
 
     let joyMode = false;
     let gyroEnabled = false;
@@ -441,6 +434,7 @@
     // ==================== Helpers: Encoding, Shaping & Padding ====================
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+    // 1D axis deadzone and exponential response curve (sliders)
     function shapeAxis(v, dz = 0.08) {
       const a = Math.abs(v);
       if (a < dz) return 0;
@@ -448,19 +442,28 @@
       return Math.round(Math.sign(v) * (0.7 * n * n + 0.3 * n) * 100);
     }
 
+    // 2D radial deadzone and curve to preserve true 360-degree joystick angles
+    function shapeJoy(nx, ny, dz = 0.08) {
+      const mag = Math.hypot(nx, ny);
+      if (mag < dz) return { x: 0, y: 0 };
+      const n = clamp((mag - dz) / (1 - dz), 0, 1);
+      const curved = 0.7 * n * n + 0.3 * n;
+      return {
+        x: Math.round((nx / mag) * curved * 100),
+        y: Math.round((ny / mag) * curved * 100)
+      };
+    }
+
     // Compute max thumb travel while preserving uniform edge padding
     function getMaxTravel(el, thumb, lockX, lockY) {
       const rect = el.getBoundingClientRect();
       const thumbSize = thumb.offsetWidth || 46;
       if (lockX && !lockY) {
-        // Vertical slider: top/bottom end gap matches left/right idle gap
         return { maxRx: 1, maxRy: Math.max(1, (rect.height - rect.width) / 2) };
       }
       if (lockY && !lockX) {
-        // Horizontal slider: left/right end gap matches top/bottom idle gap
         return { maxRx: Math.max(1, (rect.width - rect.height) / 2), maxRy: 1 };
       }
-      // 360° circular joystick: maintain the same inner padding as sliders
       const refGap = Math.max(6, (trackY.offsetWidth - thumbSize) / 2 || 8);
       const maxR = Math.max(1, rect.width / 2 - thumbSize / 2 - refGap);
       return { maxRx: maxR, maxRy: maxR };
@@ -481,9 +484,12 @@
       if (dv.byteLength < 3 || dv.getUint8(0) !== PKT_BATTERY) return;
       const pct = dv.getUint8(1);
       const volts = (dv.getUint8(2) / 10).toFixed(1);
+      const isHolding = dv.byteLength >= 4 && dv.getUint8(3) === 1;
+
       batBadge.textContent = `12V: ${pct}% (${volts}V)`;
-      const isHolding = batBadge.classList.contains('holding');
-      batBadge.className = 'badge ' + (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok') + (isHolding ? ' holding' : '');
+      batBadge.className = 'badge ' +
+        (pct <= 20 ? 'low' : pct <= 45 ? 'warn' : 'ok') +
+        (isHolding ? ' holding' : '');
     }
 
     // ==================== BLE Write Queue & Single 30Hz Loop ====================
@@ -512,15 +518,8 @@
     }
 
     setInterval(() => {
-      const now = performance.now();
-      const motorsMoving = state.x !== 0 || state.y !== 0 || state.r !== 0;
-      if (motorsMoving) lastMotorActiveMs = now;
-
-      // Dim battery border while motors are active or within the 3s recovery window
-      const isHolding = rxChar !== null && lastMotorActiveMs > 0 && (now - lastMotorActiveMs < BAT_RECOVER_MS);
-      batBadge.classList.toggle('holding', isHolding);
-
       if (!rxChar) return;
+      const now = performance.now();
       const pkt = encodeControl(state);
       const key = pkt.join(',');
       if (key !== lastPacketKey || now - lastSentMs >= HEARTBEAT_MS) {
@@ -567,7 +566,7 @@
       else if (rxChar) acquireWakeLock();
     });
 
-    // ==================== BLE Connection & Auto-Reconnect ====================
+    // ==================== BLE Connection ====================
     function setStatus(text, stateClass = 'disconnected') {
       statusText.textContent = text;
       statusBadge.className = 'conn-status ' + stateClass;
@@ -584,17 +583,10 @@
       rxChar = await service.getCharacteristic(CHAR_RX_UUID);
       txChar = await service.getCharacteristic(CHAR_TX_UUID);
 
-      if (rxChar.writeValueWithoutResponse) {
-        await rxChar.writeValueWithoutResponse(AUTH_PACKET);
-      } else {
-        await rxChar.writeValue(AUTH_PACKET);
-      }
-
       txChar.removeEventListener('characteristicvaluechanged', onTxNotify);
       txChar.addEventListener('characteristicvaluechanged', onTxNotify);
       await txChar.startNotifications();
 
-      retryCount = 0;
       lastPacketKey = '';
       setStatus('CONNECTED', 'connected');
       connectBtn.textContent = 'DISCONNECT';
@@ -614,41 +606,20 @@
       batBadge.classList.remove('holding');
       releaseWakeLock();
 
-      if (manualDisconnect || !device) {
-        setStatus('DISCONNECTED', 'disconnected');
-        connectBtn.textContent = 'CONNECT';
-        connectBtn.classList.remove('danger');
-        connectBtn.classList.add('primary');
-        return;
-      }
-
-      if (retryCount < MAX_RETRIES) {
-        retryCount++;
-        const delayMs = 600 * Math.pow(2, retryCount - 1);
-        setStatus(`RECONNECTING (${retryCount}/${MAX_RETRIES})`, 'connecting');
-        setTimeout(() => {
-          if (!manualDisconnect && device && !device.gatt.connected) {
-            connectGatt(device).catch(() => onDisconnected());
-          }
-        }, delayMs);
-      } else {
-        setStatus('DISCONNECTED', 'disconnected');
-        connectBtn.textContent = 'CONNECT';
-        connectBtn.classList.remove('danger');
-        connectBtn.classList.add('primary');
-      }
+      setStatus('DISCONNECTED', 'disconnected');
+      connectBtn.textContent = 'CONNECT';
+      connectBtn.classList.remove('danger');
+      connectBtn.classList.add('primary');
     }
 
     connectBtn.addEventListener('click', async () => {
       if (device && device.gatt.connected) {
-        manualDisconnect = true;
         resetAllControls();
         device.gatt.disconnect();
         return;
       }
 
       try {
-        manualDisconnect = false;
         if (!device) {
           device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [SERVICE_UUID] }]
@@ -713,14 +684,15 @@
       el.addEventListener('pointercancel', end);
     }
 
-    setupPad(trackY, thumbY, { lockX: true,  onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
-    setupPad(trackX, thumbX, { lockY: true,  onChange: (nx, _) => { state.x = shapeAxis(nx); } });
-    setupPad(trackR, thumbR, { lockY: true,  onChange: (nx, _) => { if (!gyroEnabled) state.r = shapeAxis(nx); } });
+    setupPad(trackY, thumbY, { lockX: true, onChange: (_, ny) => { if (!gyroEnabled) state.y = shapeAxis(ny); } });
+    setupPad(trackX, thumbX, { lockY: true, onChange: (nx, _) => { state.x = shapeAxis(nx); } });
+    setupPad(trackR, thumbR, { lockY: true, onChange: (nx, _) => { if (!gyroEnabled) state.r = shapeAxis(nx); } });
     setupPad(joyPad, joyThumb, {
       onChange: (nx, ny) => {
         if (!gyroEnabled) {
-          state.x = shapeAxis(nx);
-          state.y = shapeAxis(ny);
+          const out = shapeJoy(nx, ny);
+          state.x = out.x;
+          state.y = out.y;
         }
       }
     });
